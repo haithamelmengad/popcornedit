@@ -4,6 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { MessageInput } from '../chat/MessageInput'
 import { useChatStore } from '@/stores/chat'
 
+// Mock the agent so submit doesn't trigger real LLM calls
+vi.mock('@/agent/agent', () => ({
+  runAgent: vi.fn().mockResolvedValue(undefined),
+}))
+
 describe('MessageInput', () => {
   beforeEach(() => {
     useChatStore.setState({

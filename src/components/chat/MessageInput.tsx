@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react'
 import { useChatStore } from '@/stores/chat'
+import { runAgent } from '@/agent/agent'
 import { formatTime } from '@/lib/time'
 import { Send, Paperclip, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,18 +16,15 @@ export function MessageInput() {
     if (!text && pendingAttachments.length === 0) return
     if (isAgentThinking) return
 
-    addMessage('user', text, pendingAttachments.length > 0 ? [...pendingAttachments] : undefined)
+    const attachments = pendingAttachments.length > 0 ? [...pendingAttachments] : undefined
+    addMessage('user', text, attachments)
     clearPendingAttachments()
     setInput('')
 
-    // TODO: Send to agent for processing
-    // For now, echo back a placeholder
-    setTimeout(() => {
-      addMessage(
-        'assistant',
-        "I received your message. Agent integration coming soon — I'll be able to execute edits on your timeline."
-      )
-    }, 500)
+    // Run the agent asynchronously
+    runAgent(text, attachments).catch((err) => {
+      console.error('Agent error:', err)
+    })
   }, [input, pendingAttachments, isAgentThinking, addMessage, clearPendingAttachments])
 
   const handleKeyDown = useCallback(
