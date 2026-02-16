@@ -47,6 +47,8 @@ export interface Clip {
   speed: number             // playback speed multiplier
   volume: number            // audio volume multiplier
   color?: string            // clip color in timeline
+  fadeIn?: number           // audio fade-in duration (seconds)
+  fadeOut?: number          // audio fade-out duration (seconds)
 }
 
 export interface Action {

@@ -20,7 +20,11 @@ describe('ToolRegistry', () => {
     expect(names).toContain('speed')
     expect(names).toContain('volume')
     expect(names).toContain('delete_clip')
-    expect(names.length).toBe(7)
+    expect(names).toContain('move_clip')
+    expect(names).toContain('duplicate_clip')
+    expect(names).toContain('add_track')
+    expect(names).toContain('fade_audio')
+    expect(names.length).toBe(13)
   })
 
   it('has() returns true for registered tools', () => {
@@ -39,7 +43,7 @@ describe('ToolRegistry', () => {
   it('getDefinitions() returns LLM-compatible definitions', () => {
     registerAllTools()
     const defs = toolRegistry.getDefinitions()
-    expect(defs.length).toBe(7)
+    expect(defs.length).toBe(13)
     for (const def of defs) {
       expect(def.name).toBeTruthy()
       expect(def.description).toBeTruthy()

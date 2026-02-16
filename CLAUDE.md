@@ -19,7 +19,7 @@ npm run test:watch   # Watch mode (vitest)
 npm run test:coverage # With coverage report
 ```
 
-**Always run `npm test` after making changes.** All 142 tests must pass before committing.
+**Always run `npm test` after making changes.** All 231 tests must pass before committing.
 
 ## Architecture
 
@@ -42,7 +42,7 @@ popcorn/
 │   │   ├── layout/        # SimpleView, EditorView, Header
 │   │   ├── preview/       # VideoPreview (HTML5 video), Controls (play/scrub)
 │   │   ├── chat/          # Chat, MessageList, MessageInput
-│   │   ├── timeline/      # Timeline (canvas-based)
+│   │   ├── timeline/      # Timeline (canvas-based, animated playhead, click-to-seek)
 │   │   ├── history/       # HistoryPanel (undo/redo actions)
 │   │   ├── settings/      # Settings modal (API keys, provider select)
 │   │   └── ui/            # shadcn/ui primitives (button, input, etc.)
@@ -52,14 +52,20 @@ popcorn/
 │   │   ├── settings.ts    # API keys, active provider (persisted)
 │   │   ├── chat.ts        # Messages, attachments, agent thinking
 │   │   └── history.ts     # Action stack (undo/redo via snapshots)
-│   ├── agent/             # (Phase 2) LLM providers + tool system
-│   │   ├── providers/     # claude.ts, openai.ts, gemini.ts
-│   │   ├── tools/         # cut.ts, split.ts, trim.ts, etc.
+│   ├── agent/
+│   │   ├── agent.ts       # Core agent loop (stream + tool call loop)
+│   │   ├── providers/     # LLM adapters: claude.ts, openai.ts, gemini.ts
+│   │   ├── tools/         # 13 editing tools (see tool list below)
 │   │   └── video-understanding/
+│   │       ├── frame-sampler.ts  # Extract frames via canvas or FFmpeg
+│   │       ├── transcript.ts     # Whisper integration (stub) + search
+│   │       └── indexer.ts        # Build video index (scenes + transcript)
 │   ├── lib/
 │   │   ├── types.ts       # All TypeScript interfaces
 │   │   ├── time.ts        # formatTime, formatTimecode, parseTimecode
-│   │   └── utils.ts       # cn() helper
+│   │   ├── utils.ts       # cn() helper
+│   │   ├── ffmpeg.ts      # FFmpeg command builder (export, trim, probe, frame extract)
+│   │   └── platform.ts    # Platform abstraction (Electron IPC vs browser)
 │   └── test/
 │       ├── setup.ts       # Test mocks (ResizeObserver, canvas, media)
 │       └── integration/   # Multi-store workflow tests
@@ -73,7 +79,7 @@ popcorn/
 
 - `MediaFile` — imported video/audio files
 - `Track` — timeline row (video or audio type)
-- `Clip` — segment on a track (references a MediaFile, has startInTimeline, duration, speed, volume)
+- `Clip` — segment on a track (references a MediaFile, has startInTimeline, duration, speed, volume, fadeIn, fadeOut)
 - `Action` — undo/redo entry with snapshotBefore and snapshotAfter
 - `AgentMessage` — chat message with optional FrameAttachments
 - `Settings` — provider configs (apiKey + model per provider)
@@ -83,10 +89,28 @@ popcorn/
 | Store | Key Concepts |
 |-------|-------------|
 | `project` | addMediaFile, addTrack/addClip/removeClip/updateClip, getTimelineSnapshot/restoreTimeline |
-| `ui` | viewMode (simple/editor), playhead, isPlaying, duration, timelineZoom, settingsOpen |
+| `ui` | viewMode (simple/editor), playhead, isPlaying, duration, timelineZoom, selectedClipId, settingsOpen |
 | `settings` | providers map, activeProvider, getActiveConfig(). Persisted via zustand/persist |
 | `chat` | messages array, addMessage/appendToMessage (streaming), pendingAttachments |
 | `history` | actions array + currentIndex. pushAction discards future on new branch. undo/redo restore snapshots |
+
+### Agent Tools (13 total)
+
+| Tool | Description |
+|------|-------------|
+| `get_timeline` | Read current timeline state (tracks, clips, durations) |
+| `cut` | Remove a time range from the timeline |
+| `trim` | Adjust clip start/end in source media |
+| `split` | Split a clip at a timeline time point |
+| `speed` | Change clip playback speed (recalculates duration) |
+| `volume` | Adjust clip or track volume |
+| `delete_clip` | Remove a clip from the timeline |
+| `move_clip` | Move clip to new position or different track |
+| `duplicate_clip` | Copy a clip (placed right after original) |
+| `add_track` | Add a new empty video or audio track |
+| `fade_audio` | Set fade-in/fade-out durations on a clip |
+| `export` | Export timeline as video via FFmpeg (Electron only) |
+| `analyze_video` | Analyze video content (frame sampling + transcript) |
 
 ### Dual Layout
 
@@ -101,32 +125,43 @@ popcorn/
 Tests are co-located with source in `__tests__/` directories:
 
 ### Unit Tests (lib + stores)
-- `src/lib/__tests__/time.test.ts` — formatTime, formatTimecode, parseTimecode edge cases
-- `src/lib/__tests__/utils.test.ts` — cn() Tailwind merge behavior
-- `src/stores/__tests__/project.test.ts` — CRUD for media files, tracks, clips, snapshot/restore
-- `src/stores/__tests__/ui.test.ts` — view mode, playhead, zoom, selection
-- `src/stores/__tests__/settings.test.ts` — provider config, active provider, persistence
-- `src/stores/__tests__/chat.test.ts` — messages, streaming, attachments
-- `src/stores/__tests__/history.test.ts` — push/undo/redo/revertTo, branch discard
+- `src/lib/__tests__/time.test.ts` — formatTime, formatTimecode, parseTimecode edge cases (16 tests)
+- `src/lib/__tests__/utils.test.ts` — cn() Tailwind merge behavior (5 tests)
+- `src/lib/__tests__/ffmpeg.test.ts` — FFmpeg command builder: export, trim, probe, frame extract (13 tests)
+- `src/lib/__tests__/platform.test.ts` — Platform abstraction: Electron detection, browser fallbacks (5 tests)
+- `src/stores/__tests__/project.test.ts` — CRUD for media files, tracks, clips, snapshot/restore (13 tests)
+- `src/stores/__tests__/ui.test.ts` — view mode, playhead, zoom, selection (13 tests)
+- `src/stores/__tests__/settings.test.ts` — provider config, active provider, persistence (8 tests)
+- `src/stores/__tests__/chat.test.ts` — messages, streaming, attachments (11 tests)
+- `src/stores/__tests__/history.test.ts` — push/undo/redo/revertTo, branch discard (13 tests)
 
 ### UI Component Tests
-- `src/components/__tests__/Controls.test.tsx` — play/pause toggle, skip ±5s, time display
-- `src/components/__tests__/MessageList.test.tsx` — empty state, messages, attachments, thinking indicator
-- `src/components/__tests__/MessageInput.test.tsx` — send button state, Enter key, attachment display
-- `src/components/__tests__/HistoryPanel.test.tsx` — empty state, action list, undo/redo buttons, revert click
-- `src/components/__tests__/Settings.test.tsx` — open/close, provider cards, API key input, active switch
-- `src/components/__tests__/Header.test.tsx` — app name, import button, view toggle, settings open
-- `src/components/__tests__/Layout.test.tsx` — SimpleView and EditorView render all expected sections
+- `src/components/__tests__/Controls.test.tsx` — play/pause toggle, skip ±5s, time display (8 tests)
+- `src/components/__tests__/MessageList.test.tsx` — empty state, messages, attachments, thinking (7 tests)
+- `src/components/__tests__/MessageInput.test.tsx` — send button state, Enter key, attachment display (7 tests)
+- `src/components/__tests__/HistoryPanel.test.tsx` — empty state, action list, undo/redo buttons, revert click (7 tests)
+- `src/components/__tests__/Settings.test.tsx` — open/close, provider cards, API key input, active switch (8 tests)
+- `src/components/__tests__/Header.test.tsx` — app name, import button, view toggle, settings open (6 tests)
+- `src/components/__tests__/Layout.test.tsx` — SimpleView and EditorView render all expected sections (6 tests)
+
+### Agent Tests
+- `src/agent/__tests__/registry.test.ts` — ToolRegistry: register, get, has, execute, definitions, clear (7 tests)
+- `src/agent/__tests__/tools.test.ts` — Original 7 tools: get_timeline, cut, trim, split, speed, volume, delete_clip (24 tests)
+- `src/agent/__tests__/new-tools.test.ts` — Phase 3 tools: move_clip, duplicate_clip, add_track, fade_audio, analyze_video (22 tests)
+- `src/agent/__tests__/agent.test.ts` — Agent loop with mock provider (5 tests)
+- `src/agent/__tests__/video-understanding.test.ts` — Frame sampling, transcript search, indexer, LLM formatting (13 tests)
 
 ### Integration Tests
-- `src/test/integration/import-workflow.test.ts` — full import: media file → track → clip → duration
-- `src/test/integration/chat-workflow.test.ts` — user message → thinking → streaming response → done
-- `src/test/integration/undo-redo-workflow.test.ts` — edit chain → undo → redo → branch discard
-- `src/test/integration/view-mode-workflow.test.ts` — state preservation across view switches
+- `src/test/integration/import-workflow.test.ts` — full import: media file → track → clip → duration (2 tests)
+- `src/test/integration/chat-workflow.test.ts` — user message → thinking → streaming response → done (3 tests)
+- `src/test/integration/undo-redo-workflow.test.ts` — edit chain → undo → redo → branch discard (3 tests)
+- `src/test/integration/view-mode-workflow.test.ts` — state preservation across view switches (6 tests)
+
+**Total: 231 tests across 25 test files**
 
 ## Rules for Agents
 
-1. **Run `npm test` after every change.** All 142+ tests must pass. If you add features, add tests.
+1. **Run `npm test` after every change.** All 231+ tests must pass. If you add features, add tests.
 2. **Run `npm run build` to verify TypeScript compiles.** The build is `tsc -b && vite build`.
 3. **Never modify `src/components/ui/`** — those are shadcn/ui components managed by `npx shadcn-ui add`.
 4. **Store state is the source of truth.** Components read from Zustand stores. Don't duplicate state.
@@ -138,6 +173,7 @@ Tests are co-located with source in `__tests__/` directories:
    - Store tests: reset state in `beforeEach`, call actions directly, assert with `getState()`
    - Component tests: render with `@testing-library/react`, interact with `userEvent` or `fireEvent`
    - Integration tests: coordinate multiple stores, verify cross-store effects
+   - Tool tests: set up timeline with `setupTimeline()` helper, call `tool.execute()`, assert ToolResult + store state
 10. **Don't create files unnecessarily.** Prefer editing existing files.
 
 ## Current Status
@@ -151,32 +187,34 @@ Tests are co-located with source in `__tests__/` directories:
 - [x] Settings (Claude/OpenAI/Gemini)
 - [x] Dual-mode layout (Simple + Editor)
 - [x] 5 Zustand stores
-- [x] Test suite (142 tests)
 
-### Phase 2: Agent Core — NEXT
-- [ ] Provider-agnostic LLM layer (`src/agent/providers/`)
-- [ ] Agent tool system + registry (`src/agent/tools/`)
-- [ ] First tools: get_timeline, analyze_video, cut, trim, split
-- [ ] Wire chat → agent → tool execution → history
-- [ ] Streaming responses in chat
+### Phase 2: Agent Core — COMPLETE
+- [x] Provider-agnostic LLM layer (Claude, OpenAI, Gemini adapters)
+- [x] Agent tool system + registry (BaseTool, ToolRegistry singleton)
+- [x] 7 editing tools: get_timeline, cut, trim, split, speed, volume, delete_clip
+- [x] Agent core loop with streaming + multi-round tool calling
+- [x] Wired chat → agent → tool execution → history
 
-### Phase 3: Timeline + Understanding
-- [ ] FFmpeg integration (execute real cuts/trims)
-- [ ] Video understanding pipeline (frame extraction + transcript)
-- [ ] Frame selector (click preview → attach to chat)
-- [ ] Remaining tools: speed, volume, fade_audio, move_clip, export
-- [ ] Timeline ↔ preview sync
+### Phase 3: Timeline + Understanding — COMPLETE
+- [x] Timeline ↔ preview sync (rAF playhead animation, auto-scroll, clip selection)
+- [x] FFmpeg command builder (export, trim, probe, frame extract)
+- [x] Platform abstraction (Electron IPC vs browser)
+- [x] Video understanding pipeline (frame sampler, transcript, indexer)
+- [x] 6 new tools: move_clip, duplicate_clip, add_track, fade_audio, export, analyze_video
+- [x] 53 new tests (231 total across 25 files)
 
-### Phase 4: Polish + Export
-- [ ] Export pipeline
-- [ ] Project save/load
-- [ ] Progress indicators
-- [ ] Browser compatibility (ffmpeg.wasm)
+### Phase 4: Polish + Export — NEXT
+- [ ] Project save/load (.popcorn JSON format)
+- [ ] Progress indicators for long operations (export, analysis)
+- [ ] Browser compatibility (ffmpeg.wasm fallback)
+- [ ] Error handling and edge case polish
 
 ## Common Pitfalls
 
 - **happy-dom doesn't support all Canvas APIs.** The `getContext` mock in `test/setup.ts` covers what Timeline.tsx uses. If you add canvas operations, extend the mock.
 - **`ResizeObserver` is mocked as a class** in test setup. Don't use `vi.fn()` for it — `new` won't work.
 - **Settings store is persisted** to `localStorage` via `zustand/persist`. In tests, reset state manually in `beforeEach`.
-- **Electron APIs** are optional. Components check `window.electronAPI?.method` before calling. Browser mode uses file input fallback.
+- **Electron APIs** are optional. Components check `window.electronAPI?.method` before calling. Use `isElectron()` from `src/lib/platform.ts`.
 - **Timeline renders to canvas**, not DOM. You can't query canvas content with Testing Library. Test the data flow (stores) instead.
+- **Export tool is async** — it fires FFmpeg and returns immediately. Progress comes via IPC events.
+- **jsdom v28 has ESM issues** — use happy-dom instead (already configured).

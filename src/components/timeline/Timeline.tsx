@@ -28,6 +28,8 @@ export function Timeline() {
   const totalWidth = Math.max(duration * timelineZoom, 600)
   const totalHeight = RULER_HEIGHT + tracks.length * (TRACK_HEIGHT + TRACK_GAP) + 40
 
+  const selectedClipId = useUIStore((s) => s.selectedClipId)
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -111,9 +113,10 @@ export function Timeline() {
         ctx.fill()
         ctx.globalAlpha = 1
 
-        // Clip border
-        ctx.strokeStyle = color
-        ctx.lineWidth = 1
+        // Clip border (highlight if selected)
+        const isSelected = clip.id === selectedClipId
+        ctx.strokeStyle = isSelected ? 'hsl(50, 100%, 60%)' : color
+        ctx.lineWidth = isSelected ? 2 : 1
         roundRect(ctx, cx, ty + 4, cw, TRACK_HEIGHT - 8, 3)
         ctx.stroke()
 
@@ -147,11 +150,35 @@ export function Timeline() {
       ctx.closePath()
       ctx.fill()
     }
-  }, [tracks, duration, playhead, timelineZoom, timelineScrollX])
+  }, [tracks, duration, playhead, timelineZoom, timelineScrollX, selectedClipId])
 
+  // Redraw on state changes (non-playing)
   useEffect(() => {
     draw()
   }, [draw])
+
+  // Smooth animation loop during playback
+  const isPlaying = useUIStore((s) => s.isPlaying)
+
+  useEffect(() => {
+    if (!isPlaying) return
+    let raf: number
+    const animate = () => {
+      draw()
+      // Auto-scroll to keep playhead visible
+      const canvas = canvasRef.current
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect()
+        const px = useUIStore.getState().playhead * timelineZoom - timelineScrollX
+        if (px > rect.width - 40) {
+          setTimelineScrollX(useUIStore.getState().playhead * timelineZoom - rect.width * 0.3)
+        }
+      }
+      raf = requestAnimationFrame(animate)
+    }
+    raf = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(raf)
+  }, [isPlaying, draw, timelineZoom, timelineScrollX, setTimelineScrollX])
 
   useEffect(() => {
     const observer = new ResizeObserver(draw)
@@ -159,15 +186,35 @@ export function Timeline() {
     return () => observer.disconnect()
   }, [draw])
 
+  const selectClip = useUIStore((s) => s.selectClip)
+
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const rect = canvasRef.current?.getBoundingClientRect()
       if (!rect) return
-      const x = e.clientX - rect.left + timelineScrollX
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+      const x = mouseX + timelineScrollX
       const time = x / timelineZoom
       setPlayhead(Math.max(0, Math.min(duration, time)))
+
+      // Check if a clip was clicked
+      if (mouseY > RULER_HEIGHT) {
+        const trackIndex = Math.floor((mouseY - RULER_HEIGHT) / (TRACK_HEIGHT + TRACK_GAP))
+        const track = tracks[trackIndex]
+        if (track) {
+          const clicked = track.clips.find((clip) => {
+            const cx = clip.startInTimeline * timelineZoom - timelineScrollX
+            const cw = clip.duration * timelineZoom
+            return mouseX >= cx && mouseX <= cx + cw
+          })
+          selectClip(clicked?.id ?? null)
+          return
+        }
+      }
+      selectClip(null)
     },
-    [timelineZoom, timelineScrollX, duration, setPlayhead]
+    [timelineZoom, timelineScrollX, duration, setPlayhead, tracks, selectClip]
   )
 
   const handleWheel = useCallback(
