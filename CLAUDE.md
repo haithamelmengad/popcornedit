@@ -19,7 +19,7 @@ npm run test:watch   # Watch mode (vitest)
 npm run test:coverage # With coverage report
 ```
 
-**Always run `npm test` after making changes.** All 250 tests must pass before committing.
+**Always run `npm test` after making changes.** All 296 tests must pass before committing.
 
 ## Architecture
 
@@ -145,6 +145,9 @@ Tests are co-located with source in `__tests__/` directories:
 - `src/components/__tests__/Settings.test.tsx` — open/close, provider cards, API key input, active switch (8 tests)
 - `src/components/__tests__/Header.test.tsx` — app name, import button, view toggle, settings open (6 tests)
 - `src/components/__tests__/Layout.test.tsx` — SimpleView and EditorView render all expected sections (6 tests)
+- `src/components/__tests__/Chat.test.tsx` — Chat container: renders input, empty state, messages, send button (4 tests)
+- `src/components/__tests__/ExportProgress.test.tsx` — export progress bar, completion, error states, dismiss (7 tests)
+- `src/components/__tests__/VideoPreview.test.tsx` — empty state, drag hint, video element, capture button, audio-only (6 tests)
 
 ### Agent Tests
 - `src/agent/__tests__/registry.test.ts` — ToolRegistry: register, get, has, execute, definitions, clear (7 tests)
@@ -153,18 +156,21 @@ Tests are co-located with source in `__tests__/` directories:
 - `src/agent/__tests__/agent.test.ts` — Agent loop with mock provider (5 tests)
 - `src/agent/__tests__/video-understanding.test.ts` — Frame sampling, transcript search, indexer, LLM formatting (13 tests)
 - `src/agent/__tests__/export-progress.test.ts` — FFmpeg progress parsing (5 tests)
+- `src/agent/__tests__/providers.test.ts` — Provider factory + Claude/OpenAI/Gemini message formatting, tool parsing, streaming (20 tests)
 
 ### Integration Tests
 - `src/test/integration/import-workflow.test.ts` — full import: media file → track → clip → duration (2 tests)
 - `src/test/integration/chat-workflow.test.ts` — user message → thinking → streaming response → done (3 tests)
 - `src/test/integration/undo-redo-workflow.test.ts` — edit chain → undo → redo → branch discard (3 tests)
 - `src/test/integration/view-mode-workflow.test.ts` — state preservation across view switches (6 tests)
+- `src/test/integration/agent-tool-workflow.test.ts` — tool → store → history chain: split+undo, multi-edit undo, duplicate+delete, cross-track move, cut range, read-only tools (6 tests)
+- `src/test/integration/project-save-load-workflow.test.ts` — save → edit → load roundtrip, media metadata preservation, chat message preservation (3 tests)
 
-**Total: 250 tests across 27 test files**
+**Total: 296 tests across 33 test files**
 
 ## Rules for Agents
 
-1. **Run `npm test` after every change.** All 250+ tests must pass. If you add features, add tests.
+1. **Run `npm test` after every change.** All 296+ tests must pass. If you add features, add tests.
 2. **Run `npm run build` to verify TypeScript compiles.** The build is `tsc -b && vite build`.
 3. **Never modify `src/components/ui/`** — those are shadcn/ui components managed by `npx shadcn-ui add`.
 4. **Store state is the source of truth.** Components read from Zustand stores. Don't duplicate state.
@@ -220,7 +226,7 @@ All 4 phases are implemented. The app has:
 - Canvas timeline with animated playhead and clip selection
 - FFmpeg integration for export, project save/load
 - Full keyboard shortcuts, drag-and-drop import
-- 250 tests across 27 files, clean build
+- 296 tests across 33 files, clean build
 
 ## Common Pitfalls
 

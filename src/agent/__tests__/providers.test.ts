@@ -1,0 +1,375 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { LLMMessage, ToolDefinition } from '../providers/types'
+
+// Mock all three SDKs before importing providers
+vi.mock('@anthropic-ai/sdk', () => {
+  return {
+    default: class MockAnthropic {
+      messages = {
+        create: vi.fn(),
+        stream: vi.fn(),
+      }
+      constructor(_opts: any) {}
+    },
+  }
+})
+
+vi.mock('openai', () => {
+  return {
+    default: class MockOpenAI {
+      chat = {
+        completions: {
+          create: vi.fn(),
+        },
+      }
+      constructor(_opts: any) {}
+    },
+  }
+})
+
+vi.mock('@google/generative-ai', () => {
+  return {
+    GoogleGenerativeAI: class MockGoogleAI {
+      getGenerativeModel = vi.fn()
+      constructor(_apiKey: string) {}
+    },
+  }
+})
+
+import { createProvider } from '../providers'
+import { ClaudeProvider } from '../providers/claude'
+import { OpenAIProvider } from '../providers/openai'
+import { GeminiProvider } from '../providers/gemini'
+
+describe('createProvider', () => {
+  it('creates a Claude provider', () => {
+    const provider = createProvider('claude', { apiKey: 'sk-test', model: 'claude-sonnet-4-5-20250929' })
+    expect(provider).toBeInstanceOf(ClaudeProvider)
+    expect(provider.name).toBe('claude')
+  })
+
+  it('creates an OpenAI provider', () => {
+    const provider = createProvider('openai', { apiKey: 'sk-test', model: 'gpt-4o' })
+    expect(provider).toBeInstanceOf(OpenAIProvider)
+    expect(provider.name).toBe('openai')
+  })
+
+  it('creates a Gemini provider', () => {
+    const provider = createProvider('gemini', { apiKey: 'key-test', model: 'gemini-2.5-pro' })
+    expect(provider).toBeInstanceOf(GeminiProvider)
+    expect(provider.name).toBe('gemini')
+  })
+
+  it('throws for unknown provider', () => {
+    expect(() => createProvider('unknown' as any, { apiKey: 'x', model: 'x' })).toThrow('Unknown provider')
+  })
+})
+
+describe('ClaudeProvider', () => {
+  let provider: ClaudeProvider
+
+  beforeEach(() => {
+    provider = new ClaudeProvider('test-key', 'claude-sonnet-4-5-20250929')
+  })
+
+  it('has correct name', () => {
+    expect(provider.name).toBe('claude')
+  })
+
+  it('calls messages.create with formatted messages', async () => {
+    const client = (provider as any).client
+    client.messages.create.mockResolvedValue({
+      content: [{ type: 'text', text: 'Hello!' }],
+    })
+
+    const messages: LLMMessage[] = [
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: 'Hi' },
+    ]
+
+    const result = await provider.chat(messages)
+    expect(result.role).toBe('assistant')
+    expect(result.content).toBe('Hello!')
+    expect(client.messages.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        system: 'You are helpful.',
+        messages: [{ role: 'user', content: 'Hi' }],
+      })
+    )
+  })
+
+  it('parses tool calls from response', async () => {
+    const client = (provider as any).client
+    client.messages.create.mockResolvedValue({
+      content: [
+        { type: 'text', text: 'Let me check.' },
+        { type: 'tool_use', id: 'tc1', name: 'get_timeline', input: {} },
+      ],
+    })
+
+    const result = await provider.chat([{ role: 'user', content: 'Show timeline' }])
+    expect(result.content).toBe('Let me check.')
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls![0].name).toBe('get_timeline')
+    expect(result.toolCalls![0].id).toBe('tc1')
+  })
+
+  it('formats tool results as user messages with tool_result', async () => {
+    const client = (provider as any).client
+    client.messages.create.mockResolvedValue({
+      content: [{ type: 'text', text: 'Done.' }],
+    })
+
+    const messages: LLMMessage[] = [
+      { role: 'user', content: 'Cut it' },
+      { role: 'assistant', content: 'Cutting...', toolCalls: [{ id: 'tc1', name: 'cut', arguments: '{}' }] },
+      { role: 'tool', content: 'Cut complete', toolCallId: 'tc1' },
+    ]
+
+    await provider.chat(messages)
+
+    const call = client.messages.create.mock.calls[0][0]
+    // Tool result should be sent as a user message with tool_result content
+    const toolResultMsg = call.messages.find((m: any) =>
+      Array.isArray(m.content) && m.content.some((c: any) => c.type === 'tool_result')
+    )
+    expect(toolResultMsg).toBeDefined()
+    expect(toolResultMsg.role).toBe('user')
+  })
+
+  it('formats assistant messages with tool calls', async () => {
+    const client = (provider as any).client
+    client.messages.create.mockResolvedValue({
+      content: [{ type: 'text', text: 'Ok' }],
+    })
+
+    const messages: LLMMessage[] = [
+      { role: 'user', content: 'Hi' },
+      {
+        role: 'assistant',
+        content: 'Checking',
+        toolCalls: [{ id: 'tc1', name: 'get_timeline', arguments: '{}' }],
+      },
+      { role: 'tool', content: 'result', toolCallId: 'tc1' },
+      { role: 'user', content: 'Ok' },
+    ]
+
+    await provider.chat(messages)
+    const call = client.messages.create.mock.calls[0][0]
+    // Assistant message with tool calls should have content array with text + tool_use
+    const assistantMsg = call.messages.find((m: any) => m.role === 'assistant' && Array.isArray(m.content))
+    expect(assistantMsg).toBeDefined()
+    expect(assistantMsg.content).toHaveLength(2) // text + tool_use
+  })
+
+  it('passes tools as input_schema format', async () => {
+    const client = (provider as any).client
+    client.messages.create.mockResolvedValue({
+      content: [{ type: 'text', text: 'Hi' }],
+    })
+
+    const tools: ToolDefinition[] = [
+      { name: 'cut', description: 'Cut video', parameters: { type: 'object', properties: {} } },
+    ]
+
+    await provider.chat([{ role: 'user', content: 'Hi' }], tools)
+    const call = client.messages.create.mock.calls[0][0]
+    expect(call.tools).toHaveLength(1)
+    expect(call.tools[0].name).toBe('cut')
+    expect(call.tools[0].input_schema).toBeDefined()
+  })
+})
+
+describe('OpenAIProvider', () => {
+  let provider: OpenAIProvider
+
+  beforeEach(() => {
+    provider = new OpenAIProvider('test-key', 'gpt-4o')
+  })
+
+  it('has correct name', () => {
+    expect(provider.name).toBe('openai')
+  })
+
+  it('calls completions.create with formatted messages', async () => {
+    const client = (provider as any).client
+    client.chat.completions.create.mockResolvedValue({
+      choices: [{ message: { content: 'Hello!', tool_calls: null } }],
+    })
+
+    const messages: LLMMessage[] = [
+      { role: 'system', content: 'Be helpful' },
+      { role: 'user', content: 'Hi' },
+    ]
+
+    const result = await provider.chat(messages)
+    expect(result.role).toBe('assistant')
+    expect(result.content).toBe('Hello!')
+    expect(result.toolCalls).toBeUndefined()
+  })
+
+  it('parses tool calls from response', async () => {
+    const client = (provider as any).client
+    client.chat.completions.create.mockResolvedValue({
+      choices: [{
+        message: {
+          content: 'Let me check.',
+          tool_calls: [
+            { id: 'tc1', type: 'function', function: { name: 'get_timeline', arguments: '{}' } },
+          ],
+        },
+      }],
+    })
+
+    const result = await provider.chat([{ role: 'user', content: 'Show timeline' }])
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls![0].name).toBe('get_timeline')
+  })
+
+  it('formats messages correctly for all roles', async () => {
+    const client = (provider as any).client
+    client.chat.completions.create.mockResolvedValue({
+      choices: [{ message: { content: 'Ok' } }],
+    })
+
+    const messages: LLMMessage[] = [
+      { role: 'system', content: 'System prompt' },
+      { role: 'user', content: 'Hi' },
+      { role: 'assistant', content: 'Hello', toolCalls: [{ id: 'tc1', name: 'cut', arguments: '{}' }] },
+      { role: 'tool', content: 'Done', toolCallId: 'tc1' },
+    ]
+
+    await provider.chat(messages)
+    const call = client.chat.completions.create.mock.calls[0][0]
+    expect(call.messages).toHaveLength(4)
+    expect(call.messages[0].role).toBe('system')
+    expect(call.messages[1].role).toBe('user')
+    expect(call.messages[2].role).toBe('assistant')
+    expect(call.messages[2].tool_calls).toHaveLength(1)
+    expect(call.messages[3].role).toBe('tool')
+    expect(call.messages[3].tool_call_id).toBe('tc1')
+  })
+
+  it('passes tools as function type', async () => {
+    const client = (provider as any).client
+    client.chat.completions.create.mockResolvedValue({
+      choices: [{ message: { content: 'Hi' } }],
+    })
+
+    const tools: ToolDefinition[] = [
+      { name: 'cut', description: 'Cut video', parameters: { type: 'object' } },
+    ]
+
+    await provider.chat([{ role: 'user', content: 'Hi' }], tools)
+    const call = client.chat.completions.create.mock.calls[0][0]
+    expect(call.tools[0].type).toBe('function')
+    expect(call.tools[0].function.name).toBe('cut')
+  })
+})
+
+describe('GeminiProvider', () => {
+  let provider: GeminiProvider
+
+  beforeEach(() => {
+    provider = new GeminiProvider('test-key', 'gemini-2.5-pro')
+  })
+
+  it('has correct name', () => {
+    expect(provider.name).toBe('gemini')
+  })
+
+  it('calls sendMessage with formatted history', async () => {
+    const mockSendMessage = vi.fn().mockResolvedValue({
+      response: {
+        candidates: [{ content: { parts: [{ text: 'Hello!' }] } }],
+      },
+    })
+    const mockStartChat = vi.fn().mockReturnValue({ sendMessage: mockSendMessage })
+    const mockGetGenerativeModel = vi.fn().mockReturnValue({ startChat: mockStartChat })
+    ;(provider as any).client.getGenerativeModel = mockGetGenerativeModel
+
+    const messages: LLMMessage[] = [
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: 'Hi' },
+    ]
+
+    const result = await provider.chat(messages)
+    expect(result.role).toBe('assistant')
+    expect(result.content).toBe('Hello!')
+    expect(mockGetGenerativeModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gemini-2.5-pro',
+        systemInstruction: 'You are helpful.',
+      })
+    )
+    expect(mockSendMessage).toHaveBeenCalledWith('Hi')
+  })
+
+  it('parses function calls from response', async () => {
+    const mockSendMessage = vi.fn().mockResolvedValue({
+      response: {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'Let me check.' },
+              { functionCall: { name: 'get_timeline', args: {} } },
+            ],
+          },
+        }],
+      },
+    })
+    const mockStartChat = vi.fn().mockReturnValue({ sendMessage: mockSendMessage })
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ startChat: mockStartChat })
+
+    const result = await provider.chat([{ role: 'user', content: 'Show timeline' }])
+    expect(result.content).toBe('Let me check.')
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls![0].name).toBe('get_timeline')
+  })
+
+  it('handles tool results in history as functionResponse', async () => {
+    const mockSendMessage = vi.fn().mockResolvedValue({
+      response: {
+        candidates: [{ content: { parts: [{ text: 'Done.' }] } }],
+      },
+    })
+    const mockStartChat = vi.fn().mockReturnValue({ sendMessage: mockSendMessage })
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ startChat: mockStartChat })
+
+    const messages: LLMMessage[] = [
+      { role: 'user', content: 'Cut it' },
+      { role: 'assistant', content: 'Cutting...', toolCalls: [{ id: 'tc1', name: 'cut', arguments: '{}' }] },
+      { role: 'tool', content: 'Cut complete', toolCallId: 'tc1' },
+      { role: 'user', content: 'Thanks' },
+    ]
+
+    await provider.chat(messages)
+    const call = (provider as any).client.getGenerativeModel.mock.calls[0][0]
+    // Should not throw - this validates the message formatting works
+    expect(mockStartChat).toHaveBeenCalled()
+    const chatArgs = mockStartChat.mock.calls[0][0]
+    // History should contain user, model (with functionCall), user (with functionResponse)
+    expect(chatArgs.history.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('passes tools as functionDeclarations', async () => {
+    const mockSendMessage = vi.fn().mockResolvedValue({
+      response: {
+        candidates: [{ content: { parts: [{ text: 'Hi' }] } }],
+      },
+    })
+    const mockStartChat = vi.fn().mockReturnValue({ sendMessage: mockSendMessage })
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ startChat: mockStartChat })
+
+    const tools: ToolDefinition[] = [
+      { name: 'cut', description: 'Cut video', parameters: { type: 'object' } },
+    ]
+
+    await provider.chat([{ role: 'user', content: 'Hi' }], tools)
+    const modelOpts = (provider as any).client.getGenerativeModel.mock.calls[0][0]
+    expect(modelOpts.tools).toBeDefined()
+    expect(modelOpts.tools[0].functionDeclarations[0].name).toBe('cut')
+  })
+})
