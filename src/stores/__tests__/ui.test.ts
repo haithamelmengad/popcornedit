@@ -13,6 +13,9 @@ describe('useUIStore', () => {
       selectedClipId: null,
       selectedTrackId: null,
       settingsOpen: false,
+      isExporting: false,
+      exportProgress: 0,
+      exportError: null,
     })
   })
 
@@ -90,6 +93,34 @@ describe('useUIStore', () => {
       useUIStore.getState().setSettingsOpen(true)
       useUIStore.getState().setSettingsOpen(false)
       expect(useUIStore.getState().settingsOpen).toBe(false)
+    })
+  })
+
+  describe('export', () => {
+    it('sets exporting state', () => {
+      useUIStore.getState().setExporting(true)
+      expect(useUIStore.getState().isExporting).toBe(true)
+      expect(useUIStore.getState().exportProgress).toBe(0)
+      expect(useUIStore.getState().exportError).toBeNull()
+    })
+
+    it('sets export progress', () => {
+      useUIStore.getState().setExporting(true)
+      useUIStore.getState().setExportProgress(0.5)
+      expect(useUIStore.getState().exportProgress).toBe(0.5)
+    })
+
+    it('sets export error and clears exporting', () => {
+      useUIStore.getState().setExporting(true)
+      useUIStore.getState().setExportError('Something went wrong')
+      expect(useUIStore.getState().exportError).toBe('Something went wrong')
+      expect(useUIStore.getState().isExporting).toBe(false)
+    })
+
+    it('clears error when starting new export', () => {
+      useUIStore.getState().setExportError('old error')
+      useUIStore.getState().setExporting(true)
+      expect(useUIStore.getState().exportError).toBeNull()
     })
   })
 })

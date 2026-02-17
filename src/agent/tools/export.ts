@@ -1,7 +1,17 @@
 import { BaseTool, type ToolResult } from './types'
 import { useProjectStore } from '@/stores/project'
+import { useUIStore } from '@/stores/ui'
 import { buildExportCommand, type ExportOptions } from '@/lib/ffmpeg'
-import { runFFmpeg, isElectron } from '@/lib/platform'
+import { runFFmpeg, isElectron, onFFmpegProgress } from '@/lib/platform'
+
+/**
+ * Parse FFmpeg stderr for progress. Looks for "time=HH:MM:SS.ms" pattern.
+ */
+function parseFFmpegTime(line: string): number | null {
+  const match = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/)
+  if (!match) return null
+  return parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseInt(match[3]) + parseInt(match[4]) / 100
+}
 
 export class ExportTool extends BaseTool {
   name = 'export'
@@ -41,6 +51,7 @@ export class ExportTool extends BaseTool {
     }
 
     const store = useProjectStore.getState()
+    const ui = useUIStore.getState()
     const { timeline, mediaFiles } = store
 
     if (timeline.tracks.length === 0) {
@@ -64,14 +75,27 @@ export class ExportTool extends BaseTool {
       quality,
     })
 
-    // Run async — fire and forget, the agent will report that export started
+    // Start progress tracking
+    ui.setExporting(true)
+    const totalDuration = timeline.duration
+
+    const cleanup = onFFmpegProgress((data) => {
+      const time = parseFFmpegTime(data)
+      if (time !== null && totalDuration > 0) {
+        useUIStore.getState().setExportProgress(Math.min(time / totalDuration, 1))
+      }
+    })
+
+    // Run async with progress tracking
     runFFmpeg(ffmpegArgs)
       .then(() => {
-        console.log('Export complete:', outputPath)
+        useUIStore.getState().setExportProgress(1)
+        setTimeout(() => useUIStore.getState().setExporting(false), 1500)
       })
       .catch((err) => {
-        console.error('Export failed:', err)
+        useUIStore.getState().setExportError(err.message || 'Export failed')
       })
+      .finally(cleanup)
 
     return {
       success: true,
@@ -80,3 +104,5 @@ export class ExportTool extends BaseTool {
     }
   }
 }
+
+export { parseFFmpegTime }

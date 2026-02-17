@@ -11,6 +11,9 @@ interface UIState {
   selectedClipId: string | null
   selectedTrackId: string | null
   settingsOpen: boolean
+  isExporting: boolean
+  exportProgress: number    // 0-1
+  exportError: string | null
 
   setViewMode: (mode: ViewMode) => void
   setPlayhead: (time: number) => void
@@ -21,6 +24,9 @@ interface UIState {
   selectClip: (clipId: string | null) => void
   selectTrack: (trackId: string | null) => void
   setSettingsOpen: (open: boolean) => void
+  setExporting: (isExporting: boolean) => void
+  setExportProgress: (progress: number) => void
+  setExportError: (error: string | null) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -33,6 +39,9 @@ export const useUIStore = create<UIState>((set) => ({
   selectedClipId: null,
   selectedTrackId: null,
   settingsOpen: false,
+  isExporting: false,
+  exportProgress: 0,
+  exportError: null,
 
   setViewMode: (viewMode) => set({ viewMode }),
   setPlayhead: (playhead) => set({ playhead }),
@@ -43,4 +52,7 @@ export const useUIStore = create<UIState>((set) => ({
   selectClip: (selectedClipId) => set({ selectedClipId }),
   selectTrack: (selectedTrackId) => set({ selectedTrackId }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setExporting: (isExporting) => set({ isExporting, exportProgress: isExporting ? 0 : 0, exportError: null }),
+  setExportProgress: (exportProgress) => set({ exportProgress }),
+  setExportError: (exportError) => set({ exportError, isExporting: false }),
 }))

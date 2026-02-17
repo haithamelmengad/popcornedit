@@ -1,10 +1,13 @@
 import React, { useEffect, useCallback } from 'react'
 import { useUIStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
+import { useHistoryStore } from '@/stores/history'
 import { Header } from '@/components/layout/Header'
 import { SimpleView } from '@/components/layout/SimpleView'
 import { EditorView } from '@/components/layout/EditorView'
 import { Settings } from '@/components/settings/Settings'
+import { ExportProgress } from '@/components/ExportProgress'
+import { saveProject, loadProject } from '@/lib/project-file'
 
 export default function App() {
   const viewMode = useUIStore((s) => s.viewMode)
@@ -70,24 +73,82 @@ export default function App() {
 
   // Keyboard shortcuts
   useEffect(() => {
+    const isTextField = (el: EventTarget | null): boolean => {
+      if (!el || !(el instanceof HTMLElement)) return false
+      const tag = el.tagName.toLowerCase()
+      return tag === 'textarea' || tag === 'input' || el.isContentEditable
+    }
+
     const onKeyDown = (e: KeyboardEvent) => {
-      // Space → play/pause
-      if (e.code === 'Space' && !e.target?.toString().includes('textarea')) {
+      const mod = e.metaKey || e.ctrlKey
+
+      // Space → play/pause (not in text fields)
+      if (e.code === 'Space' && !isTextField(e.target)) {
         e.preventDefault()
         const { isPlaying, setIsPlaying } = useUIStore.getState()
         setIsPlaying(!isPlaying)
+        return
       }
+
       // Cmd+Z → undo
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+      if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
-        const { useHistoryStore } = require('@/stores/history')
         useHistoryStore.getState().undo()
+        return
       }
+
       // Cmd+Shift+Z → redo
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
+      if (mod && e.key === 'z' && e.shiftKey) {
         e.preventDefault()
-        const { useHistoryStore } = require('@/stores/history')
         useHistoryStore.getState().redo()
+        return
+      }
+
+      // Cmd+S → save project
+      if (mod && e.key === 's') {
+        e.preventDefault()
+        saveProject()
+        return
+      }
+
+      // Cmd+O → load project
+      if (mod && e.key === 'o') {
+        e.preventDefault()
+        loadProject()
+        return
+      }
+
+      // Cmd+D → duplicate selected clip
+      if (mod && e.key === 'd') {
+        e.preventDefault()
+        const clipId = useUIStore.getState().selectedClipId
+        if (clipId) {
+          const { DuplicateClipTool } = require('@/agent/tools/duplicate-clip')
+          new DuplicateClipTool().execute({ clipId })
+        }
+        return
+      }
+
+      // Delete/Backspace → delete selected clip (not in text fields)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isTextField(e.target)) {
+        e.preventDefault()
+        const clipId = useUIStore.getState().selectedClipId
+        if (clipId) {
+          const { DeleteClipTool } = require('@/agent/tools/delete-clip')
+          new DeleteClipTool().execute({ clipId })
+          useUIStore.getState().selectClip(null)
+        }
+        return
+      }
+
+      // Left/Right arrows → scrub playhead (not in text fields)
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !isTextField(e.target)) {
+        e.preventDefault()
+        const { playhead, setPlayhead, duration } = useUIStore.getState()
+        const step = e.shiftKey ? 5 : 1 // Shift for bigger jumps
+        const delta = e.key === 'ArrowLeft' ? -step : step
+        setPlayhead(Math.max(0, Math.min(duration, playhead + delta)))
+        return
       }
     }
     document.addEventListener('keydown', onKeyDown)
@@ -99,6 +160,7 @@ export default function App() {
       <Header />
       {viewMode === 'simple' ? <SimpleView /> : <EditorView />}
       <Settings />
+      <ExportProgress />
     </>
   )
 }
