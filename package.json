@@ -5,6 +5,9 @@
   "type": "module",
   "description": "AI-native video editor — Cursor for video editing",
   "main": "dist-electron/main.js",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev": "vite",
     "dev:electron": "vite --mode electron",
