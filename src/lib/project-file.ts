@@ -8,7 +8,6 @@ import { useProjectStore } from '@/stores/project'
 import { useUIStore } from '@/stores/ui'
 import { useHistoryStore } from '@/stores/history'
 import { useChatStore } from '@/stores/chat'
-import { isElectron } from './platform'
 
 const FILE_VERSION = 1
 const FILE_EXTENSION = '.popcorn'
@@ -87,20 +86,13 @@ export function deserializeProject(data: ProjectFile): void {
 }
 
 /**
- * Save project to a JSON file.
- * Electron: uses file dialog. Browser: triggers download.
+ * Save project to a JSON file, as a browser download.
  */
 export async function saveProject(): Promise<string | null> {
   const data = serializeProject()
   const json = JSON.stringify(data, null, 2)
   const filename = `${data.name.replace(/[^a-zA-Z0-9_-]/g, '_')}${FILE_EXTENSION}`
 
-  if (isElectron() && window.electronAPI) {
-    // Electron: use save dialog via IPC (would need a new IPC handler)
-    // For now, fall through to browser download
-  }
-
-  // Browser: trigger download
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -113,8 +105,7 @@ export async function saveProject(): Promise<string | null> {
 }
 
 /**
- * Load a project from a .popcorn JSON file.
- * Electron: uses file dialog. Browser: uses file input.
+ * Load a project from a .popcorn JSON file, picked with a file input.
  */
 export async function loadProject(): Promise<string | null> {
   return new Promise((resolve) => {

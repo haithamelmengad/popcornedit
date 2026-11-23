@@ -2,7 +2,6 @@ import React, { useRef, useCallback, useEffect } from 'react'
 import { useProjectStore } from '@/stores/project'
 import { useUIStore } from '@/stores/ui'
 import { formatTime } from '@/lib/time'
-import { cn } from '@/lib/utils'
 
 const RULER_HEIGHT = 28
 const TRACK_HEIGHT = 48
@@ -20,12 +19,10 @@ const CLIP_COLORS = [
 
 export function Timeline() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
   const tracks = useProjectStore((s) => s.timeline.tracks)
   const duration = useUIStore((s) => s.duration)
   const { playhead, timelineZoom, timelineScrollX, setPlayhead, setTimelineZoom, setTimelineScrollX } = useUIStore()
 
-  const totalWidth = Math.max(duration * timelineZoom, 600)
   const totalHeight = RULER_HEIGHT + tracks.length * (TRACK_HEIGHT + TRACK_GAP) + 40
 
   const selectedClipId = useUIStore((s) => s.selectedClipId)
@@ -240,7 +237,7 @@ export function Timeline() {
   }
 
   return (
-    <div ref={containerRef} className="border-t border-border overflow-hidden" style={{ height: Math.max(120, totalHeight) }}>
+    <div className="border-t border-border overflow-hidden" style={{ height: Math.max(120, totalHeight) }}>
       <canvas
         ref={canvasRef}
         className="w-full h-full cursor-crosshair"

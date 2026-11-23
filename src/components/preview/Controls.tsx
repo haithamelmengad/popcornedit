@@ -25,10 +25,6 @@ export function Controls() {
     [setPlayhead]
   )
 
-  const handleScrubStart = useCallback(() => {
-    // Pause during scrub for smoother seeking
-  }, [])
-
   const progress = duration > 0 ? (playhead / duration) * 100 : 0
 
   return (
@@ -59,7 +55,6 @@ export function Controls() {
           step={0.01}
           value={playhead}
           onChange={handleScrub}
-          onMouseDown={handleScrubStart}
           className="absolute inset-0 w-full opacity-0 cursor-pointer"
         />
       </div>

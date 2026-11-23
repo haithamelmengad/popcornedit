@@ -1,6 +1,5 @@
 import React from 'react'
 import { useHistoryStore } from '@/stores/history'
-import { formatTime } from '@/lib/time'
 import { Undo2, Redo2, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'

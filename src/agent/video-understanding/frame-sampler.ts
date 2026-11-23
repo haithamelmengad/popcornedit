@@ -1,10 +1,6 @@
 /**
- * Frame sampler — extract frames from a video at given timestamps.
- * Uses canvas in browser, or FFmpeg via platform layer in Electron.
+ * Frame sampler — extract frames from a video at given timestamps, using a canvas.
  */
-
-import { isElectron, runFFmpeg } from '@/lib/platform'
-import { buildFrameExtractCommand } from '@/lib/ffmpeg'
 
 export interface SampledFrame {
   timestamp: number     // seconds

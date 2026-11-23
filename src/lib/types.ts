@@ -1,5 +1,5 @@
 // ============================================================
-// Core data types for CutAgent
+// Core data types for Popcorn
 // ============================================================
 
 export interface MediaFile {
