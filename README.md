@@ -76,3 +76,7 @@ npm run build    # type check and production build
 Stack: Electron, React 19, TypeScript, Vite, Tailwind, Zustand. The code layout, the data types and the rules for adding a tool are in [CLAUDE.md](CLAUDE.md).
 
 To add a tool: write a class that extends `BaseTool` in `src/agent/tools/`, register it in `src/agent/tools/index.ts`, and record a history step with `pushAction` so the edit can be undone.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
