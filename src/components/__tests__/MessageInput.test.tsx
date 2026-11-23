@@ -21,7 +21,7 @@ describe('MessageInput', () => {
   it('renders textarea and send button', () => {
     render(<MessageInput />)
     expect(screen.getByPlaceholderText('Describe your edit...')).toBeInTheDocument()
-    expect(screen.getAllByRole('button').length).toBeGreaterThanOrEqual(2) // attach + send
+    expect(screen.getAllByRole('button')).toHaveLength(1) // send
   })
 
   it('send button is disabled when input is empty', () => {

@@ -14,11 +14,8 @@
     "build": "tsc -b && vite build",
     "build:electron": "tsc -b && vite build --mode electron && electron-builder",
     "preview": "vite preview",
-    "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

@@ -72,7 +72,7 @@ export function VideoPreview() {
 
   if (!videoSrc) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-black/50 rounded-lg border border-border">
+      <div className="h-full flex items-center justify-center bg-black/50 rounded-lg border border-border">
         <div className="text-center text-muted-foreground">
           <div className="text-4xl mb-3">🎬</div>
           <p className="text-sm">Import a video to get started</p>
@@ -85,7 +85,7 @@ export function VideoPreview() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0">
       <div className="flex-1 relative bg-black rounded-lg overflow-hidden min-h-0">
         <video
           ref={videoRef}

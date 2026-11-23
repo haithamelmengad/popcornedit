@@ -16,7 +16,6 @@ npm run dev:electron # Vite + Electron dev mode
 npm run build        # TypeScript check + Vite production build
 npm test             # Run all tests (vitest run)
 npm run test:watch   # Watch mode (vitest)
-npm run test:coverage # With coverage report
 ```
 
 **Always run `npm test` after making changes.** All 309 tests must pass before committing. Use Node 22 (`.nvmrc`); the dev server does not work on Node 18.

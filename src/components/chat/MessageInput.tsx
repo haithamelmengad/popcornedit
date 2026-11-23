@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from 'react'
 import { useChatStore } from '@/stores/chat'
 import { runAgent } from '@/agent/agent'
 import { formatTime } from '@/lib/time'
-import { Send, Paperclip, X } from 'lucide-react'
+import { Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export function MessageInput() {
@@ -59,9 +59,6 @@ export function MessageInput() {
         </div>
       )}
       <div className="flex items-end gap-2">
-        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Attach frame">
-          <Paperclip className="h-4 w-4" />
-        </Button>
         <textarea
           ref={textareaRef}
           value={input}

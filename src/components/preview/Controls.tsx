@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react'
 import { useUIStore } from '@/stores/ui'
 import { formatTime } from '@/lib/time'
-import { Play, Pause, SkipBack, SkipForward, Volume2 } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export function Controls() {
@@ -62,10 +62,6 @@ export function Controls() {
       <div className="text-xs text-muted-foreground tabular-nums min-w-[80px] text-right">
         {formatTime(playhead)} / {formatTime(duration)}
       </div>
-
-      <Button variant="ghost" size="icon" className="h-8 w-8">
-        <Volume2 className="h-4 w-4" />
-      </Button>
     </div>
   )
 }
