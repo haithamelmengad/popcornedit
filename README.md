@@ -69,7 +69,7 @@ Every edit is one step in the history panel. You can undo it, redo it, or click 
 ## Development
 
 ```bash
-npm test         # 325 tests (Vitest)
+npm test         # 326 tests (Vitest)
 npm run build    # type check and production build
 ```
 

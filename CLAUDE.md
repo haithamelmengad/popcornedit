@@ -16,7 +16,7 @@ npm test             # Run all tests (vitest run)
 npm run test:watch   # Watch mode (vitest)
 ```
 
-**Always run `npm test` after making changes.** All 325 tests must pass before committing. Use Node 22 (`.nvmrc`); the dev server does not work on Node 18.
+**Always run `npm test` after making changes.** All 326 tests must pass before committing. Use Node 22 (`.nvmrc`); the dev server does not work on Node 18.
 
 ## Architecture
 
@@ -150,7 +150,7 @@ Tests are co-located with source in `__tests__/` directories:
 - `src/agent/__tests__/registry.test.ts` — ToolRegistry: register, get, has, execute, argument checks, definitions, clear (9 tests)
 - `src/agent/__tests__/tools.test.ts` — Original 7 tools: get_timeline, cut, trim, split, speed, volume, delete_clip (27 tests)
 - `src/agent/__tests__/new-tools.test.ts` — Phase 3 tools: move_clip, duplicate_clip, add_track, fade_audio, analyze_video (24 tests)
-- `src/agent/__tests__/agent.test.ts` — Agent loop with mock provider (9 tests)
+- `src/agent/__tests__/agent.test.ts` — Agent loop with mock provider (10 tests)
 - `src/agent/__tests__/video-understanding.test.ts` — Frame sampling, transcript search, indexer, LLM formatting (13 tests)
 - `src/agent/__tests__/export-progress.test.ts` — FFmpeg progress parsing (5 tests)
 - `src/agent/__tests__/providers.test.ts` — Provider factory + Claude/OpenAI/Gemini message formatting, tool parsing, streaming, Claude thinking blocks and stop reasons, Gemini thought signatures (29 tests)
@@ -164,11 +164,11 @@ Tests are co-located with source in `__tests__/` directories:
 - `src/test/integration/project-save-load-workflow.test.ts` — save → edit → load roundtrip, media metadata preservation, chat message preservation (3 tests)
 - `src/test/integration/keyboard-shortcuts.test.tsx` — Delete and Cmd+D on the selected clip, undo (2 tests)
 
-**Total: 325 tests across 34 test files**
+**Total: 326 tests across 34 test files**
 
 ## Rules for Agents
 
-1. **Run `npm test` after every change.** All 325+ tests must pass. If you add features, add tests.
+1. **Run `npm test` after every change.** All 326+ tests must pass. If you add features, add tests.
 2. **Run `npm run build` to verify TypeScript compiles.** The build is `tsc -b && vite build`.
 3. **Never modify `src/components/ui/`** — those are shadcn/ui components managed by `npx shadcn-ui add`.
 4. **Store state is the source of truth.** Components read from Zustand stores. Don't duplicate state.
@@ -224,7 +224,7 @@ All 4 phases are implemented. The app has:
 - Canvas timeline with animated playhead and clip selection
 - FFmpeg integration for export, project save/load
 - Full keyboard shortcuts, drag-and-drop import
-- 325 tests across 34 files, clean build
+- 326 tests across 34 files, clean build
 
 ## Common Pitfalls
 

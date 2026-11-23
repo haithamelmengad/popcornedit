@@ -198,6 +198,33 @@ describe('runAgent', () => {
     expect(assistantMsgs[0].content).toContain('Claude declined this request.')
   })
 
+  it('keeps the text and tool status lines of earlier rounds in the chat', async () => {
+    const provider = makeMockProvider([
+      { content: 'Let me check.', toolCalls: [{ id: 'tc1', name: 'get_timeline', arguments: '{}' }] },
+      { content: 'Checking again.', toolCalls: [{ id: 'tc2', name: 'get_timeline', arguments: '{}' }] },
+      { content: 'Your timeline is empty.' },
+    ])
+    mockCreateProvider.mockReturnValue(provider as any)
+
+    await runAgent('What is on my timeline?')
+
+    const assistantMsgs = useChatStore.getState().messages.filter((m) => m.role === 'assistant')
+    expect(assistantMsgs[0].content).toBe(
+      'Let me check.\n' +
+        '✓ Timeline is empty. No tracks or clips.\n' +
+        'Checking again.\n' +
+        '✓ Timeline is empty. No tracks or clips.\n' +
+        'Your timeline is empty.'
+    )
+
+    // The model gets each round's own text only
+    const thirdRequest = provider.chatStream.mock.calls[2][0]
+    expect(thirdRequest.filter((m: any) => m.toolCalls).map((m: any) => m.content)).toEqual([
+      'Let me check.',
+      'Checking again.',
+    ])
+  })
+
   it('handles provider errors gracefully', async () => {
     const provider = makeMockProvider([{ content: '' }])
     provider.chatStream = vi.fn().mockImplementation(async function* () {
