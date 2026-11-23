@@ -62,13 +62,14 @@ Every edit is one step in the history panel. You can undo it, redo it, or click 
 - **The preview plays the source file.** Edits show on the timeline and in the export, but not in the preview player.
 - **The agent cannot see or hear the video.** `analyze_video` returns sample times only. Captured frames are sent as a time, not as an image, and there is no transcript.
 - **Export uses the first video track only**, joins clips end to end, and needs a file with an audio stream. It needs a real file path, so a file dropped on the window cannot be exported.
+- **Edits with Gemini 3 and 4 models can fail.** Google requires thought signatures to be sent back with tool calls, and the app does not do that yet.
 - **One video per project** in the preview.
 - **A saved project does not keep the video in the browser.** It stores a temporary link that stops working when the tab closes.
 
 ## Development
 
 ```bash
-npm test         # 309 tests (Vitest)
+npm test         # 324 tests (Vitest)
 npm run build    # type check and production build
 ```
 
