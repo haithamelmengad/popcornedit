@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, act, fireEvent } from '@testing-library/react'
 import { VideoPreview } from '../preview/VideoPreview'
 import { useUIStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -79,5 +79,21 @@ describe('VideoPreview', () => {
     render(<VideoPreview />)
     // Audio files don't match videoFile = mediaFiles.find(f => f.type === 'video')
     expect(screen.getByText('Import a video to get started')).toBeInTheDocument()
+  })
+
+  it('follows playback of a video imported after the first render', () => {
+    const { container } = render(<VideoPreview />)
+    act(() => {
+      useProjectStore.getState().addMediaFile({
+        name: 'clip.mp4',
+        path: 'blob:test',
+        type: 'video',
+        duration: 10,
+      })
+    })
+    const video = container.querySelector('video')!
+    video.currentTime = 3
+    fireEvent(video, new Event('timeupdate'))
+    expect(useUIStore.getState().playhead).toBe(3)
   })
 })

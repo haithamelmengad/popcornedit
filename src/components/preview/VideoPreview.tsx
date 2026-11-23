@@ -40,7 +40,7 @@ export function VideoPreview() {
       video.removeEventListener('loadedmetadata', onLoadedMetadata)
       video.removeEventListener('ended', onEnded)
     }
-  }, [setPlayhead, setDuration, setIsPlaying])
+  }, [videoSrc, setPlayhead, setDuration, setIsPlaying])
 
   // Play/pause sync
   useEffect(() => {
@@ -77,7 +77,7 @@ export function VideoPreview() {
           <div className="text-4xl mb-3">🎬</div>
           <p className="text-sm">Import a video to get started</p>
           <p className="text-xs mt-1 text-muted-foreground/60">
-            Drag & drop or use File → Import
+            Drag & drop or click Import
           </p>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useUIStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
@@ -8,6 +8,8 @@ import { EditorView } from '@/components/layout/EditorView'
 import { Settings } from '@/components/settings/Settings'
 import { ExportProgress } from '@/components/ExportProgress'
 import { saveProject, loadProject } from '@/lib/project-file'
+import { DuplicateClipTool } from '@/agent/tools/duplicate-clip'
+import { DeleteClipTool } from '@/agent/tools/delete-clip'
 
 export default function App() {
   const viewMode = useUIStore((s) => s.viewMode)
@@ -123,7 +125,6 @@ export default function App() {
         e.preventDefault()
         const clipId = useUIStore.getState().selectedClipId
         if (clipId) {
-          const { DuplicateClipTool } = require('@/agent/tools/duplicate-clip')
           new DuplicateClipTool().execute({ clipId })
         }
         return
@@ -134,7 +135,6 @@ export default function App() {
         e.preventDefault()
         const clipId = useUIStore.getState().selectedClipId
         if (clipId) {
-          const { DeleteClipTool } = require('@/agent/tools/delete-clip')
           new DeleteClipTool().execute({ clipId })
           useUIStore.getState().selectClip(null)
         }
