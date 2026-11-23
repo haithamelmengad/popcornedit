@@ -123,6 +123,7 @@ export async function runAgent(
       // Stream the response
       let fullText = ''
       const pendingToolCalls: ToolCall[] = []
+      let rawContent: unknown
       const toolCallBuilders = new Map<string, { id: string; name: string; args: string }>()
 
       for await (const chunk of provider.chatStream(llmMessages, toolDefs)) {
@@ -150,6 +151,8 @@ export async function runAgent(
               arguments: JSON.stringify(parseToolArgs(tc.args)),
             })
           }
+        } else if (chunk.type === 'done') {
+          rawContent = chunk.rawContent
         }
       }
 
@@ -163,6 +166,7 @@ export async function runAgent(
         role: 'assistant',
         content: fullText,
         toolCalls: pendingToolCalls,
+        rawContent,
       })
 
       // Execute each tool call

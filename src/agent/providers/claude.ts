@@ -16,7 +16,7 @@ export class ClaudeProvider implements LLMProvider {
 
     const response = await this.client.messages.create({
       model: this.model,
-      max_tokens: 4096,
+      max_tokens: 16000,
       system: system || undefined,
       messages: msgs,
       tools: tools?.map((t) => ({
@@ -26,6 +26,7 @@ export class ClaudeProvider implements LLMProvider {
       })),
     })
 
+    this.checkStopReason(response)
     return this.parseResponse(response)
   }
 
@@ -34,7 +35,7 @@ export class ClaudeProvider implements LLMProvider {
 
     const stream = this.client.messages.stream({
       model: this.model,
-      max_tokens: 4096,
+      max_tokens: 64000,
       system: system || undefined,
       messages: msgs,
       tools: tools?.map((t) => ({
@@ -68,10 +69,20 @@ export class ClaudeProvider implements LLMProvider {
           yield { type: 'tool_call_end', toolCall: currentToolCall }
           currentToolCall = null
         }
-      } else if (event.type === 'message_stop') {
-        yield { type: 'done' }
       }
     }
+
+    const message = await stream.finalMessage()
+    this.checkStopReason(message)
+    yield { type: 'done', rawContent: message.content }
+  }
+
+  /** A refused or cut-off turn must not run tools, so it ends the loop with a clear message. */
+  private checkStopReason(message: Anthropic.Message) {
+    // SDK 0.39 types do not list 'refusal' yet, so compare as a string
+    const stopReason: string | null = message.stop_reason
+    if (stopReason === 'refusal') throw new Error('Claude declined this request.')
+    if (stopReason === 'max_tokens') throw new Error('The reply was cut off at the output limit.')
   }
 
   private formatMessages(messages: LLMMessage[]) {
@@ -87,7 +98,10 @@ export class ClaudeProvider implements LLMProvider {
       if (msg.role === 'user') {
         msgs.push({ role: 'user', content: msg.content })
       } else if (msg.role === 'assistant') {
-        if (msg.toolCalls && msg.toolCalls.length > 0) {
+        if (msg.rawContent) {
+          // Thinking blocks are only valid when the turn goes back exactly as Claude wrote it
+          msgs.push({ role: 'assistant', content: msg.rawContent as Anthropic.ContentBlockParam[] })
+        } else if (msg.toolCalls && msg.toolCalls.length > 0) {
           const content: Anthropic.ContentBlockParam[] = []
           if (msg.content) {
             content.push({ type: 'text', text: msg.content })
@@ -105,16 +119,18 @@ export class ClaudeProvider implements LLMProvider {
           msgs.push({ role: 'assistant', content: msg.content })
         }
       } else if (msg.role === 'tool') {
-        msgs.push({
-          role: 'user',
-          content: [
-            {
-              type: 'tool_result',
-              tool_use_id: msg.toolCallId!,
-              content: msg.content,
-            },
-          ],
-        })
+        const result: Anthropic.ToolResultBlockParam = {
+          type: 'tool_result',
+          tool_use_id: msg.toolCallId!,
+          content: msg.content,
+        }
+        // Claude expects all tool results of one turn in a single user message
+        const prev = msgs[msgs.length - 1]
+        if (prev?.role === 'user' && Array.isArray(prev.content) && prev.content[0]?.type === 'tool_result') {
+          prev.content.push(result)
+        } else {
+          msgs.push({ role: 'user', content: [result] })
+        }
       }
     }
 
@@ -141,6 +157,7 @@ export class ClaudeProvider implements LLMProvider {
       role: 'assistant',
       content: textContent,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      rawContent: response.content,
     }
   }
 }

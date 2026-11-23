@@ -93,7 +93,7 @@ describe('ClaudeProvider', () => {
     expect(client.messages.create).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4096,
+        max_tokens: 16000,
         system: 'You are helpful.',
         messages: [{ role: 'user', content: 'Hi' }],
       })
@@ -162,6 +162,104 @@ describe('ClaudeProvider', () => {
     const assistantMsg = call.messages.find((m: any) => m.role === 'assistant' && Array.isArray(m.content))
     expect(assistantMsg).toBeDefined()
     expect(assistantMsg.content).toHaveLength(2) // text + tool_use
+  })
+
+  // A streamed turn the way the SDK gives it: events to iterate, then finalMessage()
+  function mockStream(client: any, finalMessage: any, events: any[] = []) {
+    client.messages.stream.mockReturnValue({
+      async *[Symbol.asyncIterator]() {
+        yield* events
+      },
+      finalMessage: async () => finalMessage,
+    })
+  }
+
+  const thinkingTurn = [
+    { type: 'thinking', thinking: '', signature: 'sig-1' },
+    { type: 'text', text: 'Checking.' },
+    { type: 'tool_use', id: 'tc1', name: 'get_timeline', input: {} },
+  ]
+
+  it('streams text and tool calls, then hands over the full turn', async () => {
+    const client = (provider as any).client
+    mockStream(client, { content: thinkingTurn, stop_reason: 'tool_use' }, [
+      { type: 'content_block_start', index: 0, content_block: thinkingTurn[0] },
+      { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'sig-1' } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
+      { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Checking.' } },
+      { type: 'content_block_stop', index: 1 },
+      { type: 'content_block_start', index: 2, content_block: thinkingTurn[2] },
+      { type: 'content_block_delta', index: 2, delta: { type: 'input_json_delta', partial_json: '{}' } },
+      { type: 'content_block_stop', index: 2 },
+    ])
+
+    const chunks = []
+    for await (const chunk of provider.chatStream([{ role: 'user', content: 'Hi' }])) chunks.push(chunk)
+
+    expect(chunks.map((c) => c.type)).toEqual(['text', 'tool_call_start', 'tool_call_delta', 'tool_call_end', 'done'])
+    expect(chunks[4].rawContent).toBe(thinkingTurn)
+    expect(client.messages.stream.mock.calls[0][0].max_tokens).toBe(64000)
+  })
+
+  it('sends a turn with thinking blocks back unchanged', async () => {
+    const client = (provider as any).client
+    mockStream(client, { content: [{ type: 'text', text: 'Done.' }], stop_reason: 'end_turn' })
+
+    const messages: LLMMessage[] = [
+      { role: 'user', content: 'Show timeline' },
+      {
+        role: 'assistant',
+        content: 'Checking.',
+        toolCalls: [{ id: 'tc1', name: 'get_timeline', arguments: '{}' }],
+        rawContent: thinkingTurn,
+      },
+      { role: 'tool', content: 'ok', toolCallId: 'tc1' },
+    ]
+    for await (const _ of provider.chatStream(messages)) {
+      // drain
+    }
+
+    const sent = client.messages.stream.mock.calls[0][0].messages
+    expect(sent[1]).toEqual({ role: 'assistant', content: thinkingTurn })
+  })
+
+  it('puts all tool results of one turn in one user message', async () => {
+    const client = (provider as any).client
+    client.messages.create.mockResolvedValue({ content: [{ type: 'text', text: 'Done.' }] })
+
+    await provider.chat([
+      { role: 'user', content: 'Cut both' },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'tc1', name: 'cut', arguments: '{}' },
+          { id: 'tc2', name: 'cut', arguments: '{}' },
+        ],
+      },
+      { role: 'tool', content: 'one', toolCallId: 'tc1' },
+      { role: 'tool', content: 'two', toolCallId: 'tc2' },
+    ])
+
+    const sent = client.messages.create.mock.calls[0][0].messages
+    expect(sent).toHaveLength(3)
+    expect(sent[2].content.map((c: any) => c.tool_use_id)).toEqual(['tc1', 'tc2'])
+  })
+
+  it.each([
+    ['refusal', 'declined'],
+    ['max_tokens', 'cut off'],
+  ])('stops with a clear message on stop reason %s', async (stop_reason, text) => {
+    const client = (provider as any).client
+    mockStream(client, { content: thinkingTurn, stop_reason })
+
+    const run = async () => {
+      for await (const _ of provider.chatStream([{ role: 'user', content: 'Hi' }])) {
+        // drain
+      }
+    }
+    await expect(run()).rejects.toThrow(text)
   })
 
   it('passes tools as input_schema format', async () => {
@@ -250,6 +348,24 @@ describe('OpenAIProvider', () => {
     expect(call.messages[2].tool_calls).toHaveLength(1)
     expect(call.messages[3].role).toBe('tool')
     expect(call.messages[3].tool_call_id).toBe('tc1')
+  })
+
+  it('ignores the raw content of another provider', async () => {
+    const client = (provider as any).client
+    client.chat.completions.create.mockResolvedValue({ choices: [{ message: { content: 'Ok' } }] })
+
+    await provider.chat([
+      { role: 'user', content: 'Hi' },
+      {
+        role: 'assistant',
+        content: 'Hello',
+        toolCalls: [{ id: 'tc1', name: 'cut', arguments: '{}' }],
+        rawContent: [{ type: 'thinking', thinking: '', signature: 'sig-1' }],
+      },
+      { role: 'tool', content: 'Done', toolCallId: 'tc1' },
+    ])
+
+    expect(JSON.stringify(client.chat.completions.create.mock.calls[0][0])).not.toContain('sig-1')
   })
 
   it('passes tools as function type', async () => {
@@ -349,6 +465,26 @@ describe('GeminiProvider', () => {
     expect(contents.map((c: any) => c.role)).toEqual(['user', 'model', 'function', 'user'])
     // The result is named after the function that was called
     expect(contents[2].parts[0].functionResponse.name).toBe('cut')
+  })
+
+  it('ignores the raw content of another provider', async () => {
+    const mockSendMessage = vi.fn().mockResolvedValue({
+      response: { candidates: [{ content: { parts: [{ text: 'Done.' }] } }] },
+    })
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ generateContent: mockSendMessage })
+
+    await provider.chat([
+      { role: 'user', content: 'Cut it' },
+      {
+        role: 'assistant',
+        content: 'Cutting...',
+        toolCalls: [{ id: 'tc1', name: 'cut', arguments: '{}' }],
+        rawContent: [{ type: 'thinking', thinking: '', signature: 'sig-1' }],
+      },
+      { role: 'tool', content: 'Cut complete', toolCallId: 'tc1' },
+    ])
+
+    expect(JSON.stringify(mockSendMessage.mock.calls[0][0])).not.toContain('sig-1')
   })
 
   it('sends the tool results as the last message when a tool round ends the history', async () => {

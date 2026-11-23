@@ -14,7 +14,7 @@ import { runAgent } from '../agent'
 
 const mockCreateProvider = vi.mocked(createProvider)
 
-function makeMockProvider(responses: Array<{ content: string; toolCalls?: any[] }>) {
+function makeMockProvider(responses: Array<{ content: string; toolCalls?: any[]; rawContent?: unknown }>) {
   let callIndex = 0
   return {
     name: 'mock',
@@ -35,7 +35,7 @@ function makeMockProvider(responses: Array<{ content: string; toolCalls?: any[] 
         }
       }
 
-      yield { type: 'done' }
+      yield { type: 'done', rawContent: resp.rawContent }
     }),
   }
 }
@@ -163,6 +163,39 @@ describe('runAgent', () => {
     const secondRequest = provider.chatStream.mock.calls[1][0]
     const withToolCall = secondRequest.find((m: any) => m.toolCalls)
     expect(withToolCall.toolCalls[0].arguments).toBe('{}')
+  })
+
+  it('sends the full assistant turn back on the next request of a tool loop', async () => {
+    const rawContent = [
+      { type: 'thinking', thinking: '', signature: 'sig-1' },
+      { type: 'tool_use', id: 'tc1', name: 'get_timeline', input: {} },
+    ]
+    const provider = makeMockProvider([
+      { content: '', toolCalls: [{ id: 'tc1', name: 'get_timeline', arguments: '{}' }], rawContent },
+      { content: 'Your timeline is empty.' },
+    ])
+    mockCreateProvider.mockReturnValue(provider as any)
+
+    await runAgent('What is on my timeline?')
+
+    const secondRequest = provider.chatStream.mock.calls[1][0]
+    expect(secondRequest.find((m: any) => m.toolCalls).rawContent).toBe(rawContent)
+  })
+
+  it('does not run tools when the provider stops the turn', async () => {
+    const provider = makeMockProvider([{ content: '' }])
+    provider.chatStream = vi.fn().mockImplementation(async function* () {
+      yield { type: 'tool_call_start', toolCall: { id: 'tc1', name: 'add_track', arguments: '' } }
+      yield { type: 'tool_call_end', toolCall: { id: 'tc1', name: 'add_track', arguments: '{"name":"B-roll","type":"video"}' } }
+      throw new Error('Claude declined this request.')
+    })
+    mockCreateProvider.mockReturnValue(provider as any)
+
+    await runAgent('Add a track')
+
+    expect(useProjectStore.getState().timeline.tracks).toHaveLength(0)
+    const assistantMsgs = useChatStore.getState().messages.filter((m) => m.role === 'assistant')
+    expect(assistantMsgs[0].content).toContain('Claude declined this request.')
   })
 
   it('handles provider errors gracefully', async () => {
