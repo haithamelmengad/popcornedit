@@ -62,16 +62,21 @@ Every edit is one step in the history panel. You can undo it, redo it, or click 
 - **The preview plays the source file.** Edits show on the timeline and in the export, but not in the preview player.
 - **The agent cannot see or hear the video.** `analyze_video` returns sample times only. Captured frames are sent as a time, not as an image, and there is no transcript.
 - **Export uses the first video track only**, joins clips end to end, and needs a file with an audio stream. It needs a real file path, so a file dropped on the window cannot be exported.
+- **Gemini 3 and 4 models are untested.** The app sends thought signatures back with tool calls, as Google requires, but this was not run against the live API.
 - **One video per project** in the preview.
 - **A saved project does not keep the video in the browser.** It stores a temporary link that stops working when the tab closes.
 
 ## Development
 
 ```bash
-npm test         # 309 tests (Vitest)
+npm test         # 326 tests (Vitest)
 npm run build    # type check and production build
 ```
 
 Stack: Electron, React 19, TypeScript, Vite, Tailwind, Zustand. The code layout, the data types and the rules for adding a tool are in [CLAUDE.md](CLAUDE.md).
 
 To add a tool: write a class that extends `BaseTool` in `src/agent/tools/`, register it in `src/agent/tools/index.ts`, and record a history step with `pushAction` so the edit can be undone.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useSettingsStore } from '../settings'
+import { useSettingsStore, DEFAULT_MODELS } from '../settings'
 
 describe('useSettingsStore', () => {
   beforeEach(() => {
@@ -69,6 +69,21 @@ describe('useSettingsStore', () => {
 
       const config = useSettingsStore.getState().getActiveConfig()
       expect(config?.apiKey).toBe('sk-test')
+    })
+
+    it('getActiveConfig uses the default model when the model is empty', () => {
+      useSettingsStore.getState().setProviderConfig('claude', { apiKey: 'sk-test', model: ' ' })
+
+      expect(useSettingsStore.getState().getActiveConfig()?.model).toBe(DEFAULT_MODELS.claude)
+    })
+
+    it('getActiveConfig keeps a saved model', () => {
+      useSettingsStore.getState().setProviderConfig('claude', {
+        apiKey: 'sk-test',
+        model: 'claude-sonnet-4-5-20250929',
+      })
+
+      expect(useSettingsStore.getState().getActiveConfig()?.model).toBe('claude-sonnet-4-5-20250929')
     })
 
     it('getActiveConfig follows active provider changes', () => {

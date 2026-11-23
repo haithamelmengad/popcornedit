@@ -115,20 +115,25 @@ export async function runAgent(
 
   const toolDefs = toolRegistry.getDefinitions()
   let rounds = 0
+  let shownText = '' // what the chat shows, kept across tool rounds
 
   try {
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++
 
       // Stream the response
-      let fullText = ''
+      let roundText = '' // this round's own text, the only text sent back to the model
       const pendingToolCalls: ToolCall[] = []
+      let rawContent: unknown
       const toolCallBuilders = new Map<string, { id: string; name: string; args: string }>()
 
       for await (const chunk of provider.chatStream(llmMessages, toolDefs)) {
         if (chunk.type === 'text' && chunk.content) {
-          fullText += chunk.content
-          useChatStore.getState().updateMessage(assistantMsg.id, { content: fullText })
+          // A later round starts on its own line, after the tool status lines
+          if (!roundText && shownText) shownText += '\n'
+          roundText += chunk.content
+          shownText += chunk.content
+          useChatStore.getState().updateMessage(assistantMsg.id, { content: shownText })
         } else if (chunk.type === 'tool_call_start' && chunk.toolCall) {
           const tc = chunk.toolCall
           toolCallBuilders.set(tc.id || '', {
@@ -150,6 +155,8 @@ export async function runAgent(
               arguments: JSON.stringify(parseToolArgs(tc.args)),
             })
           }
+        } else if (chunk.type === 'done') {
+          rawContent = chunk.rawContent
         }
       }
 
@@ -161,8 +168,9 @@ export async function runAgent(
       // Add assistant message with tool calls to history
       llmMessages.push({
         role: 'assistant',
-        content: fullText,
+        content: roundText,
         toolCalls: pendingToolCalls,
+        rawContent,
       })
 
       // Execute each tool call
@@ -171,8 +179,8 @@ export async function runAgent(
 
         // Show tool result in the message
         const statusIcon = result.success ? '✓' : '✗'
-        fullText += `\n${statusIcon} ${result.message}`
-        useChatStore.getState().updateMessage(assistantMsg.id, { content: fullText })
+        shownText += `\n${statusIcon} ${result.message}`
+        useChatStore.getState().updateMessage(assistantMsg.id, { content: shownText })
 
         // Add tool result to LLM history
         llmMessages.push({

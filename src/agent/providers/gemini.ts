@@ -34,10 +34,13 @@ export class GeminiProvider implements LLMProvider {
     })
 
     const result = await genModel.generateContentStream({ contents })
+    const rawParts: Part[] = []
 
+    // Read result.stream, not result.response: the SDK rebuilds that one and drops thought signatures
     for await (const chunk of result.stream) {
       const parts = chunk.candidates?.[0]?.content?.parts
       if (!parts) continue
+      rawParts.push(...parts)
 
       for (const part of parts) {
         if (part.text) {
@@ -55,7 +58,7 @@ export class GeminiProvider implements LLMProvider {
       }
     }
 
-    yield { type: 'done' }
+    yield { type: 'done', rawContent: rawParts }
   }
 
   private formatMessages(messages: LLMMessage[]) {
@@ -82,7 +85,10 @@ export class GeminiProvider implements LLMProvider {
           toolNames.set(tc.id, tc.name)
           parts.push({ functionCall: { name: tc.name, args: JSON.parse(tc.arguments) } })
         }
-        if (parts.length > 0) push('model', parts)
+        // Gemini 3 and later reject a tool loop unless the turn goes back as it came, thought signatures included
+        const raw = msg.rawContent as Part[] | undefined
+        if (raw?.length) push('model', [...raw])
+        else if (parts.length > 0) push('model', parts)
       } else {
         // A tool result must carry the name of the function that was called
         push('function', [
@@ -119,6 +125,7 @@ export class GeminiProvider implements LLMProvider {
       role: 'assistant',
       content: textContent,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      rawContent: parts,
     }
   }
 
