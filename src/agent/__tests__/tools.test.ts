@@ -45,14 +45,14 @@ describe('GetTimelineTool', () => {
   })
 
   it('reports empty timeline', () => {
-    const result = tool.execute({})
+    const result = tool.execute()
     expect(result.success).toBe(true)
     expect(result.message).toContain('empty')
   })
 
   it('reports tracks and clips', () => {
     setupTimeline()
-    const result = tool.execute({})
+    const result = tool.execute()
     expect(result.success).toBe(true)
     expect(result.data?.tracks).toBeDefined()
     expect((result.data!.tracks as any[]).length).toBe(1)

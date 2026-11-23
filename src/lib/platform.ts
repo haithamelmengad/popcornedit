@@ -3,19 +3,6 @@
  * Detects Electron vs browser and routes calls accordingly.
  */
 
-interface ElectronAPI {
-  openFile: (filters?: { name: string; extensions: string[] }[]) => Promise<string | null>
-  ffmpegRun: (args: string[]) => Promise<{ stdout: string; stderr: string }>
-  ffprobeRun: (args: string[]) => Promise<{ stdout: string; stderr: string }>
-  onFfmpegProgress: (callback: (data: string) => void) => () => void
-}
-
-declare global {
-  interface Window {
-    electronAPI?: ElectronAPI
-  }
-}
-
 export function isElectron(): boolean {
   return typeof window !== 'undefined' && !!window.electronAPI
 }
