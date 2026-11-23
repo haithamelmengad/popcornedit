@@ -27,6 +27,20 @@ function ensureTools() {
   }
 }
 
+/**
+ * Parse tool arguments from the model. A tool with no parameters streams an
+ * empty string, and bad JSON must not reach the next request, so both become {}.
+ */
+function parseToolArgs(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+  } catch {
+    // fall through
+  }
+  return {}
+}
+
 /** Maximum tool call rounds per user message (prevents infinite loops) */
 const MAX_TOOL_ROUNDS = 10
 
@@ -77,19 +91,23 @@ export async function runAgent(
           ']'
       }
       llmMessages.push({ role: 'user', content })
-    } else if (msg.role === 'assistant') {
+    } else if (msg.role === 'assistant' && msg.content) {
+      // Providers reject an assistant message with no text
       llmMessages.push({ role: 'assistant', content: msg.content })
     }
   }
 
-  // Add current user message
-  let currentContent = userMessage
-  if (attachments && attachments.length > 0) {
-    currentContent += '\n[Attached frames: ' +
-      attachments.map((a) => `frame at ${a.timestamp.toFixed(1)}s`).join(', ') +
-      ']'
+  // Add current user message, unless the chat input already put it in the store
+  const last = recentMessages[recentMessages.length - 1]
+  if (!(last?.role === 'user' && last.content === userMessage)) {
+    let currentContent = userMessage
+    if (attachments && attachments.length > 0) {
+      currentContent += '\n[Attached frames: ' +
+        attachments.map((a) => `frame at ${a.timestamp.toFixed(1)}s`).join(', ') +
+        ']'
+    }
+    llmMessages.push({ role: 'user', content: currentContent })
   }
-  llmMessages.push({ role: 'user', content: currentContent })
 
   // Create placeholder assistant message for streaming
   const assistantMsg = useChatStore.getState().addMessage('assistant', '')
@@ -129,7 +147,7 @@ export async function runAgent(
             pendingToolCalls.push({
               id: tc.id,
               name: tc.name,
-              arguments: tc.args,
+              arguments: JSON.stringify(parseToolArgs(tc.args)),
             })
           }
         }
@@ -149,14 +167,7 @@ export async function runAgent(
 
       // Execute each tool call
       for (const tc of pendingToolCalls) {
-        let args: Record<string, unknown>
-        try {
-          args = JSON.parse(tc.arguments)
-        } catch {
-          args = {}
-        }
-
-        const result = toolRegistry.execute(tc.name, args)
+        const result = toolRegistry.execute(tc.name, parseToolArgs(tc.arguments))
 
         // Show tool result in the message
         const statusIcon = result.success ? '✓' : '✗'

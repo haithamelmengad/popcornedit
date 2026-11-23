@@ -21,7 +21,12 @@ class ToolRegistry {
     if (!tool) {
       return { success: false, message: `Unknown tool: ${name}` }
     }
-    return tool.execute(args)
+    try {
+      return tool.execute(args)
+    } catch (e) {
+      // Arguments come from the model; report a bad call back to it instead of ending the turn
+      return { success: false, message: `Tool ${name} failed: ${e instanceof Error ? e.message : String(e)}` }
+    }
   }
 
   getDefinitions(): ToolDefinition[] {

@@ -280,14 +280,13 @@ describe('GeminiProvider', () => {
     expect(provider.name).toBe('gemini')
   })
 
-  it('calls sendMessage with formatted history', async () => {
+  it('calls generateContent with formatted contents', async () => {
     const mockSendMessage = vi.fn().mockResolvedValue({
       response: {
         candidates: [{ content: { parts: [{ text: 'Hello!' }] } }],
       },
     })
-    const mockStartChat = vi.fn().mockReturnValue({ sendMessage: mockSendMessage })
-    const mockGetGenerativeModel = vi.fn().mockReturnValue({ startChat: mockStartChat })
+    const mockGetGenerativeModel = vi.fn().mockReturnValue({ generateContent: mockSendMessage })
     ;(provider as any).client.getGenerativeModel = mockGetGenerativeModel
 
     const messages: LLMMessage[] = [
@@ -304,7 +303,9 @@ describe('GeminiProvider', () => {
         systemInstruction: 'You are helpful.',
       })
     )
-    expect(mockSendMessage).toHaveBeenCalledWith('Hi')
+    expect(mockSendMessage).toHaveBeenCalledWith({
+      contents: [{ role: 'user', parts: [{ text: 'Hi' }] }],
+    })
   })
 
   it('parses function calls from response', async () => {
@@ -320,8 +321,7 @@ describe('GeminiProvider', () => {
         }],
       },
     })
-    const mockStartChat = vi.fn().mockReturnValue({ sendMessage: mockSendMessage })
-    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ startChat: mockStartChat })
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ generateContent: mockSendMessage })
 
     const result = await provider.chat([{ role: 'user', content: 'Show timeline' }])
     expect(result.content).toBe('Let me check.')
@@ -335,8 +335,7 @@ describe('GeminiProvider', () => {
         candidates: [{ content: { parts: [{ text: 'Done.' }] } }],
       },
     })
-    const mockStartChat = vi.fn().mockReturnValue({ sendMessage: mockSendMessage })
-    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ startChat: mockStartChat })
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ generateContent: mockSendMessage })
 
     const messages: LLMMessage[] = [
       { role: 'user', content: 'Cut it' },
@@ -346,12 +345,36 @@ describe('GeminiProvider', () => {
     ]
 
     await provider.chat(messages)
-    const call = (provider as any).client.getGenerativeModel.mock.calls[0][0]
-    // Should not throw - this validates the message formatting works
-    expect(mockStartChat).toHaveBeenCalled()
-    const chatArgs = mockStartChat.mock.calls[0][0]
-    // History should contain user, model (with functionCall), user (with functionResponse)
-    expect(chatArgs.history.length).toBeGreaterThanOrEqual(3)
+    const { contents } = mockSendMessage.mock.calls[0][0]
+    expect(contents.map((c: any) => c.role)).toEqual(['user', 'model', 'function', 'user'])
+    // The result is named after the function that was called
+    expect(contents[2].parts[0].functionResponse.name).toBe('cut')
+  })
+
+  it('sends the tool results as the last message when a tool round ends the history', async () => {
+    const mockSendMessage = vi.fn().mockResolvedValue({
+      response: { candidates: [{ content: { parts: [{ text: 'Done.' }] } }] },
+    })
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ generateContent: mockSendMessage })
+
+    await provider.chat([
+      { role: 'user', content: 'Cut it twice' },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'tc1', name: 'cut', arguments: '{}' },
+          { id: 'tc2', name: 'split', arguments: '{}' },
+        ],
+      },
+      { role: 'tool', content: 'ok', toolCallId: 'tc1' },
+      { role: 'tool', content: 'ok', toolCallId: 'tc2' },
+    ])
+
+    const { contents } = mockSendMessage.mock.calls[0][0]
+    const lastTurn = contents[contents.length - 1]
+    expect(lastTurn.role).toBe('function')
+    expect(lastTurn.parts.map((p: any) => p.functionResponse.name)).toEqual(['cut', 'split'])
   })
 
   it('passes tools as functionDeclarations', async () => {
@@ -360,8 +383,7 @@ describe('GeminiProvider', () => {
         candidates: [{ content: { parts: [{ text: 'Hi' }] } }],
       },
     })
-    const mockStartChat = vi.fn().mockReturnValue({ sendMessage: mockSendMessage })
-    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ startChat: mockStartChat })
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ generateContent: mockSendMessage })
 
     const tools: ToolDefinition[] = [
       { name: 'cut', description: 'Cut video', parameters: { type: 'object' } },
@@ -371,5 +393,7 @@ describe('GeminiProvider', () => {
     const modelOpts = (provider as any).client.getGenerativeModel.mock.calls[0][0]
     expect(modelOpts.tools).toBeDefined()
     expect(modelOpts.tools[0].functionDeclarations[0].name).toBe('cut')
+    // No properties: the schema is left out
+    expect(modelOpts.tools[0].functionDeclarations[0].parameters).toBeUndefined()
   })
 })

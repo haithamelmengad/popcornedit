@@ -27,6 +27,21 @@ describe('ToolRegistry', () => {
     expect(names.length).toBe(13)
   })
 
+  it('execute() reports a tool that throws instead of throwing', () => {
+    toolRegistry.register({
+      name: 'boom',
+      description: '',
+      parameters: {},
+      execute: () => {
+        throw new Error('bad arguments')
+      },
+      toDefinition: () => ({ name: 'boom', description: '', parameters: {} }),
+    })
+    const result = toolRegistry.execute('boom', {})
+    expect(result.success).toBe(false)
+    expect(result.message).toContain('bad arguments')
+  })
+
   it('has() returns true for registered tools', () => {
     registerAllTools()
     expect(toolRegistry.has('cut')).toBe(true)

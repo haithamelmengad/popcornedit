@@ -140,6 +140,31 @@ describe('runAgent', () => {
     expect(assistantMsgs.length).toBeGreaterThanOrEqual(1)
   })
 
+  it('sends the user message once when the chat input already stored it', async () => {
+    const provider = makeMockProvider([{ content: 'Ok.' }])
+    mockCreateProvider.mockReturnValue(provider as any)
+
+    useChatStore.getState().addMessage('user', 'Cut the intro')
+    await runAgent('Cut the intro')
+
+    const sent = provider.chatStream.mock.calls[0][0]
+    expect(sent.filter((m: any) => m.role === 'user')).toHaveLength(1)
+  })
+
+  it('turns empty tool arguments into valid JSON for the next request', async () => {
+    const provider = makeMockProvider([
+      { content: '', toolCalls: [{ id: 'tc1', name: 'get_timeline', arguments: '' }] },
+      { content: 'Your timeline is empty.' },
+    ])
+    mockCreateProvider.mockReturnValue(provider as any)
+
+    await runAgent('What is on my timeline?')
+
+    const secondRequest = provider.chatStream.mock.calls[1][0]
+    const withToolCall = secondRequest.find((m: any) => m.toolCalls)
+    expect(withToolCall.toolCalls[0].arguments).toBe('{}')
+  })
+
   it('handles provider errors gracefully', async () => {
     const provider = makeMockProvider([{ content: '' }])
     provider.chatStream = vi.fn().mockImplementation(async function* () {
