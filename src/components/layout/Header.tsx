@@ -1,9 +1,8 @@
 import React, { useCallback } from 'react'
 import { useUIStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
-import { Settings, PanelLeftOpen, PanelLeftClose, FolderOpen, Import } from 'lucide-react'
+import { Settings, PanelLeftOpen, PanelLeftClose, Import } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { nanoid } from 'nanoid'
 
 export function Header() {
   const { viewMode, setViewMode, setSettingsOpen, setDuration } = useUIStore()
@@ -72,8 +71,6 @@ export function Header() {
         })
 
         setDuration(duration)
-
-        URL.revokeObjectURL(path) // cleanup if blob
       }
       video.src = path
     },

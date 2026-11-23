@@ -70,7 +70,7 @@ export class CutTool extends BaseTool {
             id: clip.id,
             updates: {
               duration: newDuration,
-              endInSource: clip.startInSource + newDuration / clip.speed,
+              endInSource: clip.startInSource + newDuration * clip.speed,
             },
           })
           clipsTrimmed++
@@ -84,7 +84,7 @@ export class CutTool extends BaseTool {
             id: clip.id,
             updates: {
               startInTimeline: start,
-              startInSource: clip.startInSource + trimAmount / clip.speed,
+              startInSource: clip.startInSource + trimAmount * clip.speed,
               duration: clip.duration - trimAmount,
             },
           })
@@ -99,14 +99,14 @@ export class CutTool extends BaseTool {
             id: clip.id,
             updates: {
               duration: start - clip.startInTimeline,
-              endInSource: clip.startInSource + (start - clip.startInTimeline) / clip.speed,
+              endInSource: clip.startInSource + (start - clip.startInTimeline) * clip.speed,
             },
           })
           // Add new clip for the part after the cut
-          const afterStart = clip.startInSource + (end - clip.startInTimeline) / clip.speed
+          const afterStart = clip.startInSource + (end - clip.startInTimeline) * clip.speed
           store.addClip(track.id, {
             mediaFileId: clip.mediaFileId,
-            startInTimeline: start, // will be shifted by gap-close below
+            startInTimeline: start,
             startInSource: afterStart,
             endInSource: clip.endInSource,
             duration: clipEnd - end,

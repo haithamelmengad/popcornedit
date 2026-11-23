@@ -1,6 +1,10 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
+
+// The main process is built as an ES module, where __dirname does not exist
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 let mainWindow: BrowserWindow | null = null
 
@@ -13,7 +17,7 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#09090b',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },

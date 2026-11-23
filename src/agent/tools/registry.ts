@@ -21,7 +21,29 @@ class ToolRegistry {
     if (!tool) {
       return { success: false, message: `Unknown tool: ${name}` }
     }
-    return tool.execute(args)
+    // Arguments come from the model: check them against the tool's schema before it touches the timeline
+    const schema = tool.parameters as {
+      required?: string[]
+      properties?: Record<string, { type?: string }>
+    }
+    for (const key of schema.required || []) {
+      if (args[key] === undefined || args[key] === null) {
+        return { success: false, message: `Missing required argument: ${key}` }
+      }
+    }
+    for (const [key, value] of Object.entries(args)) {
+      const type = schema.properties?.[key]?.type
+      if (value == null || !type) continue
+      if (typeof value !== type || (type === 'number' && !Number.isFinite(value))) {
+        return { success: false, message: `Argument ${key} must be a ${type}` }
+      }
+    }
+    try {
+      return tool.execute(args)
+    } catch (e) {
+      // Arguments come from the model; report a bad call back to it instead of ending the turn
+      return { success: false, message: `Tool ${name} failed: ${e instanceof Error ? e.message : String(e)}` }
+    }
   }
 
   getDefinitions(): ToolDefinition[] {

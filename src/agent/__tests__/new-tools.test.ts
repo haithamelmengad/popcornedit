@@ -258,3 +258,30 @@ describe('AnalyzeVideoTool', () => {
     expect(result.success).toBe(false)
   })
 })
+
+describe('copies keep fades', () => {
+  beforeEach(() => {
+    useProjectStore.setState({ mediaFiles: [], timeline: { tracks: [], duration: 0 } })
+    useHistoryStore.setState({ actions: [], currentIndex: -1 })
+  })
+
+  it('duplicate_clip keeps the fades of the original', () => {
+    const { clipId } = setupTimeline()
+    new FadeAudioTool().execute({ clipId, fadeIn: 2 })
+    const result = new DuplicateClipTool().execute({ clipId })
+    const copy = useProjectStore
+      .getState()
+      .timeline.tracks[0].clips.find((c) => c.id === result.data!.newClipId)
+    expect(copy!.fadeIn).toBe(2)
+  })
+
+  it('move_clip to another track keeps the fades and returns the new clip ID', () => {
+    const { clipId } = setupTimeline()
+    new FadeAudioTool().execute({ clipId, fadeOut: 3 })
+    const trackId = new AddTrackTool().execute({ name: 'Video 2', type: 'video' }).data!.trackId as string
+    const result = new MoveClipTool().execute({ clipId, newStartInTimeline: 5, newTrackId: trackId })
+    const moved = useProjectStore.getState().timeline.tracks[1].clips[0]
+    expect(moved.fadeOut).toBe(3)
+    expect(result.data!.clipId).toBe(moved.id)
+  })
+})

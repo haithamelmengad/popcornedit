@@ -12,7 +12,7 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async chat(messages: LLMMessage[], tools?: ToolDefinition[]): Promise<LLMMessage> {
-    const { systemInstruction, history, lastUserMessage } = this.formatMessages(messages)
+    const { systemInstruction, contents } = this.formatMessages(messages)
 
     const genModel = this.client.getGenerativeModel({
       model: this.model,
@@ -20,15 +20,12 @@ export class GeminiProvider implements LLMProvider {
       tools: tools ? [{ functionDeclarations: tools.map(this.toFunctionDeclaration) }] : undefined,
     })
 
-    const chat = genModel.startChat({ history })
-    const result = await chat.sendMessage(lastUserMessage)
-    const response = result.response
-
-    return this.parseResponse(response)
+    const result = await genModel.generateContent({ contents })
+    return this.parseResponse(result.response)
   }
 
   async *chatStream(messages: LLMMessage[], tools?: ToolDefinition[]): AsyncGenerator<StreamChunk> {
-    const { systemInstruction, history, lastUserMessage } = this.formatMessages(messages)
+    const { systemInstruction, contents } = this.formatMessages(messages)
 
     const genModel = this.client.getGenerativeModel({
       model: this.model,
@@ -36,8 +33,7 @@ export class GeminiProvider implements LLMProvider {
       tools: tools ? [{ functionDeclarations: tools.map(this.toFunctionDeclaration) }] : undefined,
     })
 
-    const chat = genModel.startChat({ history })
-    const result = await chat.sendMessageStream(lastUserMessage)
+    const result = await genModel.generateContentStream({ contents })
 
     for await (const chunk of result.stream) {
       const parts = chunk.candidates?.[0]?.content?.parts
@@ -64,58 +60,43 @@ export class GeminiProvider implements LLMProvider {
 
   private formatMessages(messages: LLMMessage[]) {
     let systemInstruction = ''
-    const history: Content[] = []
-    let lastUserMessage = ''
+    const contents: Content[] = []
+    const toolNames = new Map<string, string>() // tool call id -> function name
+
+    // Gemini wants one message per turn, so join neighbours with the same role
+    const push = (role: string, parts: Part[]) => {
+      const prev = contents[contents.length - 1]
+      if (prev?.role === role) prev.parts.push(...parts)
+      else contents.push({ role, parts })
+    }
 
     for (const msg of messages) {
       if (msg.role === 'system') {
         systemInstruction += msg.content + '\n'
-        continue
-      }
-
-      if (msg.role === 'user') {
-        lastUserMessage = msg.content
-        // Don't add to history yet — last user message is sent via sendMessage
+      } else if (msg.role === 'user') {
+        push('user', [{ text: msg.content }])
       } else if (msg.role === 'assistant') {
-        // Push previous user message to history first
-        if (lastUserMessage) {
-          history.push({ role: 'user', parts: [{ text: lastUserMessage }] })
-          lastUserMessage = ''
-        }
-
         const parts: Part[] = []
         if (msg.content) parts.push({ text: msg.content })
-        if (msg.toolCalls) {
-          for (const tc of msg.toolCalls) {
-            parts.push({
-              functionCall: { name: tc.name, args: JSON.parse(tc.arguments) },
-            })
-          }
+        for (const tc of msg.toolCalls || []) {
+          toolNames.set(tc.id, tc.name)
+          parts.push({ functionCall: { name: tc.name, args: JSON.parse(tc.arguments) } })
         }
-        if (parts.length > 0) {
-          history.push({ role: 'model', parts })
-        }
-      } else if (msg.role === 'tool') {
-        // Push previous user message to history
-        if (lastUserMessage) {
-          history.push({ role: 'user', parts: [{ text: lastUserMessage }] })
-          lastUserMessage = ''
-        }
-        history.push({
-          role: 'user',
-          parts: [
-            {
-              functionResponse: {
-                name: 'tool_result',
-                response: { result: msg.content },
-              },
+        if (parts.length > 0) push('model', parts)
+      } else {
+        // A tool result must carry the name of the function that was called
+        push('function', [
+          {
+            functionResponse: {
+              name: toolNames.get(msg.toolCallId || '') || 'tool_result',
+              response: { result: msg.content },
             },
-          ],
-        })
+          },
+        ])
       }
     }
 
-    return { systemInstruction: systemInstruction.trim(), history, lastUserMessage }
+    return { systemInstruction: systemInstruction.trim(), contents }
   }
 
   private parseResponse(response: any): LLMMessage {
@@ -142,10 +123,12 @@ export class GeminiProvider implements LLMProvider {
   }
 
   private toFunctionDeclaration(tool: ToolDefinition): FunctionDeclaration {
+    // Gemini rejects an object schema with no properties, so leave it out for tools without parameters
+    const hasParams = Object.keys((tool.parameters.properties as object) || {}).length > 0
     return {
       name: tool.name,
       description: tool.description,
-      parameters: tool.parameters as any,
+      ...(hasParams && { parameters: tool.parameters as any }),
     }
   }
 }

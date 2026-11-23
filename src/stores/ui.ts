@@ -52,7 +52,7 @@ export const useUIStore = create<UIState>((set) => ({
   selectClip: (selectedClipId) => set({ selectedClipId }),
   selectTrack: (selectedTrackId) => set({ selectedTrackId }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
-  setExporting: (isExporting) => set({ isExporting, exportProgress: isExporting ? 0 : 0, exportError: null }),
+  setExporting: (isExporting) => set({ isExporting, exportProgress: 0, exportError: null }),
   setExportProgress: (exportProgress) => set({ exportProgress }),
   setExportError: (exportError) => set({ exportError, isExporting: false }),
 }))

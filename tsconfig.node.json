@@ -6,8 +6,9 @@
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
-    "noEmit": true,
     "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "node_modules/.tmp/tsc-node",
     "skipLibCheck": true,
     "types": ["node"]
   },
