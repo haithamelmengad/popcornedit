@@ -13,9 +13,9 @@ interface SettingsState {
 }
 
 const DEFAULT_MODELS: Record<ProviderType, string> = {
-  claude: 'claude-sonnet-4-5-20250929',
-  openai: 'gpt-4o',
-  gemini: 'gemini-2.5-pro',
+  claude: 'claude-sonnet-5-5',
+  openai: 'gpt-6.2-sol',
+  gemini: 'gemini-4-hydrogen',
 }
 
 export { DEFAULT_MODELS }
@@ -42,7 +42,10 @@ export const useSettingsStore = create<SettingsState>()(
 
       getActiveConfig: () => {
         const { providers, activeProvider } = get()
-        return providers[activeProvider] || null
+        const config = providers[activeProvider]
+        if (!config) return null
+        // An empty model field means the default model
+        return { ...config, model: config.model?.trim() || DEFAULT_MODELS[activeProvider] }
       },
     }),
     {

@@ -11,17 +11,17 @@ const PROVIDERS: { id: ProviderType; name: string; models: string[] }[] = [
   {
     id: 'claude',
     name: 'Anthropic (Claude)',
-    models: ['claude-opus-4-6', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001'],
+    models: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
   },
   {
     id: 'openai',
     name: 'OpenAI',
-    models: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini'],
+    models: ['gpt-6.2-astra', 'gpt-6.2-sol', 'gpt-6.1-terra', 'gpt-6-luna'],
   },
   {
     id: 'gemini',
     name: 'Google (Gemini)',
-    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
+    models: ['gemini-4-carbon', 'gemini-4-neon', 'gemini-4-hydrogen', 'gemini-4-argon', 'gemini-3.5-flash-lite'],
   },
 ]
 
@@ -32,7 +32,7 @@ export function Settings() {
   if (!settingsOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={() => setSettingsOpen(false)} />
       <div className="relative bg-card border border-border rounded-lg w-full max-w-lg max-h-[80vh] overflow-auto shadow-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -88,22 +88,27 @@ export function Settings() {
                         }
                         className="h-8 text-xs"
                       />
-                      <select
-                        value={config?.model || DEFAULT_MODELS[provider.id]}
+                      <Input
+                        aria-label="Model"
+                        list={`models-${provider.id}`}
+                        placeholder={DEFAULT_MODELS[provider.id]}
+                        value={config?.model ?? DEFAULT_MODELS[provider.id]}
                         onChange={(e) =>
                           setProviderConfig(provider.id, {
                             apiKey: config?.apiKey || '',
                             model: e.target.value,
                           })
                         }
-                        className="w-full h-8 rounded-md border border-input bg-transparent px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                      >
+                        autoComplete="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        className="h-8 text-xs"
+                      />
+                      <datalist id={`models-${provider.id}`}>
                         {provider.models.map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
+                          <option key={m} value={m} />
                         ))}
-                      </select>
+                      </datalist>
                     </div>
                   </div>
                 )

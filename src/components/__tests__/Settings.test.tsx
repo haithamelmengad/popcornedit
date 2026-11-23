@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Settings } from '../settings/Settings'
-import { useSettingsStore } from '@/stores/settings'
+import { useSettingsStore, DEFAULT_MODELS } from '@/stores/settings'
 import { useUIStore } from '@/stores/ui'
 
 describe('Settings', () => {
@@ -79,5 +79,45 @@ describe('Settings', () => {
     fireEvent.click(useButtons[0])
 
     expect(useSettingsStore.getState().activeProvider).toBe('openai')
+  })
+
+  it('shows the default model when none is saved', () => {
+    useUIStore.setState({ settingsOpen: true })
+    render(<Settings />)
+
+    const models = screen.getAllByLabelText('Model') as HTMLInputElement[]
+    expect(models.map((m) => m.value)).toEqual([
+      DEFAULT_MODELS.claude,
+      DEFAULT_MODELS.openai,
+      DEFAULT_MODELS.gemini,
+    ])
+  })
+
+  it('accepts any model ID', () => {
+    useUIStore.setState({ settingsOpen: true })
+    render(<Settings />)
+
+    fireEvent.change(screen.getAllByLabelText('Model')[0], { target: { value: 'my-own-model-1' } })
+
+    expect(useSettingsStore.getState().providers.claude?.model).toBe('my-own-model-1')
+  })
+
+  it('keeps a saved model that is not in the suggestions', () => {
+    useSettingsStore.setState({
+      providers: { claude: { apiKey: 'sk-test', model: 'claude-sonnet-4-5-20250929' } },
+    })
+    useUIStore.setState({ settingsOpen: true })
+    render(<Settings />)
+
+    expect((screen.getAllByLabelText('Model')[0] as HTMLInputElement).value).toBe('claude-sonnet-4-5-20250929')
+  })
+
+  it('suggests models for each provider', () => {
+    useUIStore.setState({ settingsOpen: true })
+    render(<Settings />)
+
+    const input = screen.getAllByLabelText('Model')[0]
+    const options = document.querySelectorAll(`datalist#${input.getAttribute('list')} option`)
+    expect(Array.from(options).map((o) => o.getAttribute('value'))).toContain(DEFAULT_MODELS.claude)
   })
 })
