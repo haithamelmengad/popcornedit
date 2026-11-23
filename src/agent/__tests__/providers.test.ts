@@ -467,24 +467,52 @@ describe('GeminiProvider', () => {
     expect(contents[2].parts[0].functionResponse.name).toBe('cut')
   })
 
-  it('ignores the raw content of another provider', async () => {
-    const mockSendMessage = vi.fn().mockResolvedValue({
-      response: { candidates: [{ content: { parts: [{ text: 'Done.' }] } }] },
+  it('sends the model turn back unchanged, thought signatures included', async () => {
+    const turnParts = [
+      { text: '', thoughtSignature: 'sig-text' },
+      { text: 'Cutting' },
+      { text: '...' },
+      { functionCall: { name: 'cut', args: { start: 0, end: 5 } }, thoughtSignature: 'sig-call' },
+    ]
+    const generateContentStream = vi.fn().mockImplementation(async () => ({
+      stream: (async function* () {
+        yield { candidates: [{ content: { parts: turnParts.slice(0, 2) } }] }
+        yield { candidates: [{ content: { parts: turnParts.slice(2) } }] }
+      })(),
+    }))
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ generateContentStream })
+
+    const messages: LLMMessage[] = [{ role: 'user', content: 'Cut it' }]
+    const chunks = []
+    for await (const chunk of provider.chatStream(messages)) chunks.push(chunk)
+    const done = chunks[chunks.length - 1]
+    const call = chunks.find((c) => c.type === 'tool_call_end')!.toolCall!
+    expect(done.rawContent).toEqual(turnParts)
+
+    // Next request of the same loop, built the way the agent builds it
+    messages.push({
+      role: 'assistant',
+      content: 'Cutting...',
+      toolCalls: [{ id: call.id!, name: call.name!, arguments: call.arguments! }],
+      rawContent: done.rawContent,
     })
-    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ generateContent: mockSendMessage })
+    messages.push({ role: 'tool', content: 'Cut complete', toolCallId: call.id })
+    for await (const _ of provider.chatStream(messages)) {
+      // drain
+    }
 
-    await provider.chat([
-      { role: 'user', content: 'Cut it' },
-      {
-        role: 'assistant',
-        content: 'Cutting...',
-        toolCalls: [{ id: 'tc1', name: 'cut', arguments: '{}' }],
-        rawContent: [{ type: 'thinking', thinking: '', signature: 'sig-1' }],
-      },
-      { role: 'tool', content: 'Cut complete', toolCallId: 'tc1' },
-    ])
+    const { contents } = generateContentStream.mock.calls[1][0]
+    expect(contents[1]).toEqual({ role: 'model', parts: turnParts })
+    expect(contents[2].parts[0].functionResponse.name).toBe('cut')
+  })
 
-    expect(JSON.stringify(mockSendMessage.mock.calls[0][0])).not.toContain('sig-1')
+  it('keeps the raw parts of a non-streaming reply', async () => {
+    const parts = [{ functionCall: { name: 'cut', args: {} }, thoughtSignature: 'sig-call' }]
+    const generateContent = vi.fn().mockResolvedValue({ response: { candidates: [{ content: { parts } }] } })
+    ;(provider as any).client.getGenerativeModel = vi.fn().mockReturnValue({ generateContent })
+
+    const result = await provider.chat([{ role: 'user', content: 'Cut it' }])
+    expect(result.rawContent).toBe(parts)
   })
 
   it('sends the tool results as the last message when a tool round ends the history', async () => {

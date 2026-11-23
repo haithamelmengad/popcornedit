@@ -7,7 +7,7 @@ export interface LLMMessage {
   content: string
   toolCallId?: string       // for tool result messages
   toolCalls?: ToolCall[]    // for assistant messages with tool use
-  /** The provider's own content for this assistant turn. Claude needs it sent back unchanged in the same tool loop. Other providers ignore it. */
+  /** The provider's own content for this assistant turn. Claude and Gemini need it sent back unchanged in the same tool loop. OpenAI ignores it. */
   rawContent?: unknown
 }
 
