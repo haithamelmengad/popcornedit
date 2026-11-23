@@ -38,14 +38,10 @@ export class DuplicateClipTool extends BaseTool {
       return { success: false, message: `Clip ${clipId} not found` }
     }
 
+    const { id: _id, trackId: _trackId, ...rest } = original
     const newClip = store.addClip(foundTrackId, {
-      mediaFileId: original.mediaFileId,
+      ...rest,
       startInTimeline: original.startInTimeline + original.duration,
-      startInSource: original.startInSource,
-      endInSource: original.endInSource,
-      duration: original.duration,
-      speed: original.speed,
-      volume: original.volume,
     })
 
     const snapshotAfter = store.getTimelineSnapshot()

@@ -72,6 +72,12 @@ describe('ToolRegistry', () => {
     expect(result.message).toContain('Unknown tool')
   })
 
+  it('execute() rejects missing and wrongly typed arguments before the tool runs', () => {
+    registerAllTools()
+    expect(toolRegistry.execute('move_clip', { clipId: 'c1' }).message).toContain('newStartInTimeline')
+    expect(toolRegistry.execute('cut', { start: '5', end: 10 }).message).toContain('start must be a number')
+  })
+
   it('clear() removes all tools', () => {
     registerAllTools()
     expect(toolRegistry.getNames().length).toBeGreaterThan(0)

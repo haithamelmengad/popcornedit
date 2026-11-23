@@ -55,7 +55,7 @@ export class SplitTool extends BaseTool {
 
     // Calculate split point in source media
     const timeIntoClip = time - foundClip.startInTimeline
-    const sourceTimeAtSplit = foundClip.startInSource + timeIntoClip / foundClip.speed
+    const sourceTimeAtSplit = foundClip.startInSource + timeIntoClip * foundClip.speed
 
     // Trim the first clip (original) to end at split point
     const firstDuration = timeIntoClip

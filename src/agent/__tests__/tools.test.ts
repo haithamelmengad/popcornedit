@@ -299,3 +299,51 @@ describe('DeleteClipTool', () => {
     expect(result.success).toBe(false)
   })
 })
+
+describe('edits on a clip with a changed speed', () => {
+  // Source 0-120s played at 2x: 60s on the timeline, so 1 timeline second is 2 source seconds
+  function setupFastClip() {
+    const ids = setupTimeline()
+    new SpeedTool().execute({ clipId: ids.clipId, speed: 2 })
+    return ids
+  }
+  const clips = () =>
+    [...useProjectStore.getState().timeline.tracks[0].clips].sort((a, b) => a.startInTimeline - b.startInTimeline)
+
+  beforeEach(() => {
+    useProjectStore.setState({ mediaFiles: [], timeline: { tracks: [], duration: 0 } })
+    useHistoryStore.setState({ actions: [], currentIndex: -1 })
+  })
+
+  it('split maps the timeline time to the right source time', () => {
+    const { clipId } = setupFastClip()
+    new SplitTool().execute({ clipId, time: 20 })
+    const [first, second] = clips()
+    expect(first.endInSource).toBe(40)
+    expect(second.startInSource).toBe(40)
+    expect(first.duration + second.duration).toBe(60)
+  })
+
+  it('cut removes the matching source range', () => {
+    setupFastClip()
+    new CutTool().execute({ start: 10, end: 20 })
+    const [first, second] = clips()
+    expect(first.endInSource).toBe(20)
+    expect(second.startInSource).toBe(40)
+    expect(second.startInTimeline).toBe(10)
+    expect(useProjectStore.getState().timeline.duration).toBe(50)
+  })
+})
+
+describe('TrimTool range check', () => {
+  beforeEach(() => {
+    useProjectStore.setState({ mediaFiles: [], timeline: { tracks: [], duration: 0 } })
+  })
+
+  it('rejects a start at or after the end of the clip', () => {
+    const { clipId } = setupTimeline()
+    const result = new TrimTool().execute({ clipId, newStartInSource: 120 })
+    expect(result.success).toBe(false)
+    expect(useProjectStore.getState().timeline.tracks[0].clips[0].duration).toBe(120)
+  })
+})

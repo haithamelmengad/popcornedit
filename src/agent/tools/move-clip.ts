@@ -54,6 +54,7 @@ export class MoveClipTool extends BaseTool {
     }
 
     const targetTrackId = newTrackId || sourceTrackId
+    let movedClipId = clipId
 
     // Verify target track exists
     if (newTrackId && !store.timeline.tracks.find((t) => t.id === newTrackId)) {
@@ -66,15 +67,8 @@ export class MoveClipTool extends BaseTool {
     } else {
       // Different track — remove from source, add to target
       store.removeClip(sourceTrackId, clipId)
-      store.addClip(targetTrackId, {
-        mediaFileId: clip.mediaFileId,
-        startInTimeline: newStart,
-        startInSource: clip.startInSource,
-        endInSource: clip.endInSource,
-        duration: clip.duration,
-        speed: clip.speed,
-        volume: clip.volume,
-      })
+      const { id: _id, trackId: _trackId, ...rest } = clip
+      movedClipId = store.addClip(targetTrackId, { ...rest, startInTimeline: newStart }).id
     }
 
     const snapshotAfter = store.getTimelineSnapshot()
@@ -87,7 +81,8 @@ export class MoveClipTool extends BaseTool {
 
     return {
       success: true,
-      message: `Moved clip to ${newStart.toFixed(1)}s${newTrackId ? ' on new track' : ''}.`,
+      message: `Moved clip to ${newStart.toFixed(1)}s${newTrackId ? ' on new track' : ''}. Clip ID: ${movedClipId}`,
+      data: { clipId: movedClipId },
     }
   }
 }

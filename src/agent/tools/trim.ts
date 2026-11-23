@@ -59,6 +59,9 @@ export class TrimTool extends BaseTool {
       if (newStartInSource < 0) {
         return { success: false, message: 'newStartInSource cannot be negative' }
       }
+      if (newStartInSource >= (newEndInSource ?? foundClip.endInSource)) {
+        return { success: false, message: 'newStartInSource must be before the end of the clip' }
+      }
       const trimAmount = (newStartInSource - foundClip.startInSource) / foundClip.speed
       updates.startInSource = newStartInSource
       updates.startInTimeline = foundClip.startInTimeline + trimAmount
